@@ -193,3 +193,20 @@
   - Koreksi judul dan baris `Kecepatan rata-rata` pada `LAPORAN RINGKASAN GASINAVIF` (tepat 50 kolom visual tanpa ada border kanan `║` yang mencuat keluar).
 - [x] **Kompilasi & Instalasi Rilis**:
   - Kompilasi `cargo build --release` dan pemasangan ulang ke `~/.local/bin/gasinavif`.
+
+---
+
+### Sprint 11: Pengaturan Interaktif (--settings) & Batasan Thread CPU ⏳
+- [ ] **Sistem Konfigurasi Global Persisten**:
+  - Simpan & muat konfigurasi di `~/.config/gasinavif/config.json`.
+  - Field: `speed` (1-10), `quality` (1-100), `yuv` ("420", "422", "444", "400").
+  - Auto-save saat keluar atau mengubah pengaturan, menjadi nilai default eksekusi selanjutnya.
+- [ ] **Menu TUI Interaktif (`--settings`)**:
+  - Menu utama navigasi panah atas/bawah dengan highlight warna dan pemilih Enter.
+  - Submenu Speed: slider visual digeser kiri/kanan (`1..10`) dengan kotak penjelasan dinamis.
+  - Submenu Kualitas (q): penyesuaian atas/bawah per-step 1 (`1..100`) dengan bar visual dan penjelasan rentang kualitas.
+  - Submenu YUV Format: pilihan 444, 422, 420, 400 dengan penjelasan chroma subsampling.
+  - Tombol kembali (Esc / q) dan auto-save otomatis.
+- [ ] **Proteksi & Pembatasan Thread CPU**:
+  - Cap jumlah thread paralel maksimal sebesar jumlah core/thread logis CPU komputer (`available_parallelism`).
+  - Cegah penambahan thread via argumen `-j` maupun hotkey interaktif `t`/`+` melampaui batas kemampuan CPU fisik/logis.
