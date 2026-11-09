@@ -9,7 +9,7 @@
 - [x] **Fase 2: Antarmuka CLI & Parsing Argumen (`clap`)** ✅
 - [x] **Fase 3: File Scanner & Logika Pairing Cerdas (RAW + JPG)** ✅
 - [x] **Fase 4: Manajemen Metadata & EXIF In-Process** ✅
-- [ ] **Fase 5: Core Processing Engine (Tahap 1 & Tahap 2)**
+- [x] **Fase 5: Core Processing Engine (Tahap 1 & Tahap 2)** ✅
 - [ ] **Fase 6: State Management, Resume, & Signal Handling (`Ctrl+C`)**
 - [ ] **Fase 7: Tampilan Progress Bar & Laporan Akhir (`indicatif`)**
 - [ ] **Fase 8: Pengujian, Benchmarking, & Distribusi Binary**
@@ -89,18 +89,19 @@
 
 ---
 
-### Fase 5: Core Processing Engine
-- [ ] **Worker Tahap 1: RAW ke JPG**
-  - Decode file RAW ke image buffer.
+### Fase 5: Core Processing Engine ✅
+- [x] **Worker Tahap 1: RAW ke JPG**
+  - Ekstrak embedded preview resolusi tinggi via `rexiv2` (zero demosaic CPU).
+  - Fallback ke ImageMagick (`magick`) jika tidak ada preview beresolusi tinggi.
   - Simpan sebagai JPG sementara (`<nama>.jpg.tmp`) kualitas tinggi (q98).
-  - Salin metadata EXIF dari RAW ke `.jpg.tmp`.
+  - Salin seluruh metadata EXIF dari RAW ke `.jpg.tmp`.
   - Pengecekan ukuran:
     - Jika `ukuran_jpg < ukuran_raw`: rename `.jpg.tmp` → `.jpg`, hapus file RAW asli.
     - Jika `ukuran_jpg >= ukuran_raw`: hapus `.jpg.tmp`, beri tag `SKIPPED_LARGER` pada RAW asli.
-- [ ] **Worker Tahap 2: JPG ke AVIF**
-  - Cek apakah JPG sudah memiliki tag `COMPRESSED_BY_SCRIPT` (skip jika sudah).
-  - Encode JPG ke AVIF sementara (`<nama>.avif.tmp`) dengan setting (q60, speed 8, YUV 4:2:0).
-  - Salin metadata EXIF dari JPG ke `.avif.tmp` beserta injeksi tag identitas script.
+- [x] **Worker Tahap 2: JPG ke AVIF**
+  - Cek apakah JPG sudah memiliki tag `COMPRESSED_BY_SCRIPT` di awal.
+  - Encode JPG ke AVIF sementara (`<nama>.avif.tmp`) dengan setting (q60, speed 8).
+  - Salin metadata EXIF dari JPG dan tanamkan tag `COMPRESSED_BY_SCRIPT` langsung ke AVIF container via `ravif`.
   - Pengecekan ukuran:
     - Jika `ukuran_avif < ukuran_jpg`:
       - Salin timestamp modifikasi dari JPG asli ke `.avif.tmp`.
@@ -108,6 +109,7 @@
     - Jika `ukuran_avif >= ukuran_jpg` (kompresi gagal menghemat ukuran):
       - Hapus `.avif.tmp`.
       - Tandai JPG asli dengan `STATUS=SKIPPED_LARGER` (agar tidak diproses ulang di masa mendatang).
+- [x] Parallel processing pipeline di `main.rs` via `rayon` dengan progress bar interaktif dan laporan akhir.
 
 ---
 
