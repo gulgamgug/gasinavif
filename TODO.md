@@ -162,15 +162,15 @@
 
 ---
 
-### Sprint 9: Kontrol Interaktif & Monitoring Real-Time (Live TUI)
-- [ ] **Indikator Kecepatan & Estimasi ETA**:
+### Sprint 9: Kontrol Interaktif & Monitoring Real-Time (Live TUI) ✅
+- [x] **Indikator Kecepatan & Estimasi ETA**:
   - Kecepatan pemrosesan dinamis (*rolling average* foto/detik).
   - Estimasi waktu tersisa (ETA) format `hh:mm:ss` / `mm:ss` yang diperbarui secara langsung.
-- [ ] **Live Interactive Keyboard Controls (Non-blocking)**:
+- [x] **Live Interactive Keyboard Controls (Non-blocking)**:
   - Mode raw terminal via `crossterm` dengan pengembalian mode otomatis (*RAII guard*).
   - `s` (Show Workers): Toggle tampilan baris per worker thread/core dan nama file yang sedang aktif dikompresi.
   - `v` (Verbose): Toggle pesan log detail secara *on-the-fly* tanpa perlu restart program.
-  - `t` (Threads): Pengaturan jumlah worker paralel dinamis saat kompresi sedang berjalan.
+  - `t` (Threads): Pengaturan jumlah worker paralel dinamis saat kompresi sedang berjalan (`+` dan `-` juga didukung).
   - `l` (List/Folder Tree): Tampilan struktur direktori pohon (*tree hierarchy*) dengan karakter `├── `, `└── `, indikator progres `x/y` per folder, serta animasi spinner / centang hijau (`✔`) saat folder tuntas.
-- [ ] **Distribusi & Rilis**:
+- [x] **Distribusi & Rilis**:
   - Kompilasi ulang release binary dengan fitur interaktif baru dan instalasi ke `~/.local/bin/gasinavif`.
