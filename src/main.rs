@@ -8,11 +8,23 @@ mod ui;
 use anyhow::{Context, Result};
 use clap::Parser;
 use console::style;
+use rayon::prelude::*;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 fn main() -> Result<()> {
     let args = cli::Args::parse();
     let start_time = Instant::now();
+
+    // Inisialisasi custom threadpool jika user menentukan flag -j / --threads
+    if let Some(threads) = args.threads {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build_global()
+            .ok();
+    }
 
     // Resolve direktori target
     let target_dir = std::fs::canonicalize(&args.directory)
@@ -45,13 +57,13 @@ fn main() -> Result<()> {
 
     println!();
 
-    // ── Fase 6: State management ──
+    // ── Fase 6: State management & Resume ──
     if args.fresh {
         println!("{} Menghapus state lama (--fresh)...", style("🗑").bold());
         state::AppState::reset(&target_dir)?;
     }
 
-    let mut app_state = state::AppState::load(&target_dir)?;
+    let app_state = Arc::new(Mutex::new(state::AppState::load(&target_dir)?));
 
     // ── Fase 3: Scanning direktori ──
     println!(
@@ -61,18 +73,22 @@ fn main() -> Result<()> {
 
     let scan = scanner::scan_directory(&target_dir, args.verbose)?;
 
-    // Filter file yang sudah pernah diproses (resume)
-    let stage1: Vec<_> = scan
-        .stage1_raw_to_jpg
-        .into_iter()
-        .filter(|p| !app_state.is_done(p))
-        .collect();
+    // Filter file yang sudah pernah diproses (resume checkpoint)
+    let stage1: Vec<_> = {
+        let state = app_state.lock().unwrap();
+        scan.stage1_raw_to_jpg
+            .into_iter()
+            .filter(|p| !state.is_done(p))
+            .collect()
+    };
 
-    let stage2: Vec<_> = scan
-        .stage2_jpg_to_avif
-        .into_iter()
-        .filter(|p| !app_state.is_done(p))
-        .collect();
+    let stage2: Vec<_> = {
+        let state = app_state.lock().unwrap();
+        scan.stage2_jpg_to_avif
+            .into_iter()
+            .filter(|p| !state.is_done(p))
+            .collect()
+    };
 
     let raw_to_delete: Vec<_> = scan.raw_to_delete;
 
@@ -155,7 +171,7 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    // ── Hapus RAW duplikat (ada pasangan JPG dari kamera) ──
+    // ── Hapus RAW duplikat (kamera shoot RAW+JPG) ──
     if !raw_to_delete.is_empty() {
         if args.keep_raw {
             println!(
@@ -186,33 +202,196 @@ fn main() -> Result<()> {
         }
     }
 
-    // ── Simpan state awal ──
-    app_state.original_total_size = scan.total_original_size;
-    app_state.save(&target_dir)?;
-
-    // TODO: Fase 5 — Jalankan Tahap 1 (RAW → JPG) dan Tahap 2 (JPG → AVIF) di sini.
-    if !stage1.is_empty() {
-        println!(
-            "\n{} Tahap 1: Konversi RAW → JPG ({} file) — belum diimplementasi",
-            style("⏳").bold(),
-            stage1.len()
-        );
+    // Simpan state awal
+    {
+        let mut state = app_state.lock().unwrap();
+        state.original_total_size = scan.total_original_size;
+        state.save(&target_dir)?;
     }
 
-    if !stage2.is_empty() {
-        println!(
-            "{} Tahap 2: Konversi JPG → AVIF ({} file) — belum diimplementasi",
-            style("⏳").bold(),
-            stage2.len()
-        );
+    // Counter statistik
+    let stage1_processed = Arc::new(AtomicUsize::new(0));
+    let stage2_processed = Arc::new(AtomicUsize::new(0));
+    let skipped_count = Arc::new(AtomicUsize::new(0));
+    let newly_created_jpgs = Arc::new(Mutex::new(Vec::<PathBuf>::new()));
+
+    // ── TAHAP 1: Konversi RAW → JPG ──
+    if !stage1.is_empty() && !args.dry_run {
+        println!("{}", style("==> [Tahap 1/2] Memproses File RAW ke JPG...").bold().cyan());
+        let pb = ui::create_progress_bar(stage1.len() as u64, "RAW → JPG");
+
+        stage1.par_iter().for_each(|raw_path| {
+            let res = processor::process_raw_to_jpg(raw_path, 98);
+            pb.inc(1);
+
+            match res {
+                Ok(processor::ProcessResult::Success { saved }) => {
+                    stage1_processed.fetch_add(1, Ordering::Relaxed);
+                    // Dapatkan path JPG yang baru saja dibuat
+                    let dir = raw_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+                    let stem = raw_path.file_stem().and_then(|s| s.to_str()).unwrap_or("raw");
+                    let created_jpg = dir.join(format!("{stem}.jpg"));
+                    if created_jpg.exists() {
+                        newly_created_jpgs.lock().unwrap().push(created_jpg);
+                    }
+
+                    if args.verbose {
+                        pb.println(format!(
+                            "  {} {} (hemat {})",
+                            style("[OK-RAW]").cyan().bold(),
+                            raw_path.display(),
+                            ui::format_size(saved)
+                        ));
+                    }
+
+                    let mut state = app_state.lock().unwrap();
+                    state.mark_completed(raw_path.clone());
+                }
+                Ok(processor::ProcessResult::SkippedAlreadyTagged) => {
+                    skipped_count.fetch_add(1, Ordering::Relaxed);
+                    if args.verbose {
+                        pb.println(format!(
+                            "  {} {}",
+                            style("[SKIP-TAG]").dim(),
+                            raw_path.display()
+                        ));
+                    }
+                    let mut state = app_state.lock().unwrap();
+                    state.mark_skipped(raw_path.clone());
+                }
+                Ok(processor::ProcessResult::SkippedLarger) => {
+                    skipped_count.fetch_add(1, Ordering::Relaxed);
+                    if args.verbose {
+                        pb.println(format!(
+                            "  {} {} (JPG >= RAW, RAW dipertahankan)",
+                            style("[BATAL]").yellow().bold(),
+                            raw_path.display()
+                        ));
+                    }
+                    let mut state = app_state.lock().unwrap();
+                    state.mark_skipped(raw_path.clone());
+                }
+                Ok(processor::ProcessResult::Failed(err)) => {
+                    pb.println(format!(
+                        "  {} {}: {}",
+                        style("[GAGAL]").red().bold(),
+                        raw_path.display(),
+                        err
+                    ));
+                }
+                Err(err) => {
+                    pb.println(format!(
+                        "  {} {}: {}",
+                        style("[ERROR]").red().bold(),
+                        raw_path.display(),
+                        err
+                    ));
+                }
+            }
+        });
+
+        pb.finish_with_message("Tahap 1 selesai.");
+        println!();
+
+        // Simpan checkpoint state
+        let state = app_state.lock().unwrap();
+        let _ = state.save(&target_dir);
     }
 
-    // Laporan durasi
-    let elapsed = start_time.elapsed();
-    println!(
-        "\n{} Pemindaian selesai dalam {:.2}s",
-        style("⏱").bold(),
-        elapsed.as_secs_f64()
+    // ── TAHAP 2: Konversi JPG → AVIF (termasuk output JPG dari Tahap 1) ──
+    let mut all_stage2 = stage2;
+    {
+        let new_jpgs = newly_created_jpgs.lock().unwrap();
+        all_stage2.extend(new_jpgs.clone());
+    }
+
+    if !all_stage2.is_empty() && !args.dry_run {
+        println!("{}", style("==> [Tahap 2/2] Memproses File JPG ke AVIF...").bold().green());
+        let pb = ui::create_progress_bar(all_stage2.len() as u64, "JPG → AVIF");
+
+        all_stage2.par_iter().for_each(|jpg_path| {
+            let res = processor::process_jpg_to_avif(jpg_path, args.quality, args.speed);
+            pb.inc(1);
+
+            match res {
+                Ok(processor::ProcessResult::Success { saved }) => {
+                    stage2_processed.fetch_add(1, Ordering::Relaxed);
+                    if args.verbose {
+                        pb.println(format!(
+                            "  {} {} (hemat {})",
+                            style("[OK-AVIF]").green().bold(),
+                            jpg_path.display(),
+                            ui::format_size(saved)
+                        ));
+                    }
+
+                    let mut state = app_state.lock().unwrap();
+                    state.mark_completed(jpg_path.clone());
+                }
+                Ok(processor::ProcessResult::SkippedAlreadyTagged) => {
+                    skipped_count.fetch_add(1, Ordering::Relaxed);
+                    if args.verbose {
+                        pb.println(format!(
+                            "  {} {}",
+                            style("[SKIP-TAG]").dim(),
+                            jpg_path.display()
+                        ));
+                    }
+                    let mut state = app_state.lock().unwrap();
+                    state.mark_skipped(jpg_path.clone());
+                }
+                Ok(processor::ProcessResult::SkippedLarger) => {
+                    skipped_count.fetch_add(1, Ordering::Relaxed);
+                    if args.verbose {
+                        pb.println(format!(
+                            "  {} {} (AVIF >= JPG, JPG dipertahankan)",
+                            style("[BATAL]").yellow().bold(),
+                            jpg_path.display()
+                        ));
+                    }
+                    let mut state = app_state.lock().unwrap();
+                    state.mark_skipped(jpg_path.clone());
+                }
+                Ok(processor::ProcessResult::Failed(err)) => {
+                    pb.println(format!(
+                        "  {} {}: {}",
+                        style("[GAGAL]").red().bold(),
+                        jpg_path.display(),
+                        err
+                    ));
+                }
+                Err(err) => {
+                    pb.println(format!(
+                        "  {} {}: {}",
+                        style("[ERROR]").red().bold(),
+                        jpg_path.display(),
+                        err
+                    ));
+                }
+            }
+        });
+
+        pb.finish_with_message("Tahap 2 selesai.");
+        println!();
+
+        // Simpan checkpoint state
+        let state = app_state.lock().unwrap();
+        let _ = state.save(&target_dir);
+    }
+
+    // ── Hitung ukuran akhir folder ──
+    let final_scan = scanner::scan_directory(&target_dir, false)?;
+    let final_size = final_scan.total_original_size;
+    let initial_size = scan.total_original_size;
+
+    // Cetak laporan statistik akhir
+    ui::print_summary(
+        initial_size,
+        final_size,
+        start_time.elapsed(),
+        stage1_processed.load(Ordering::Relaxed),
+        stage2_processed.load(Ordering::Relaxed),
+        skipped_count.load(Ordering::Relaxed),
     );
 
     Ok(())
