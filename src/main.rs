@@ -3,6 +3,7 @@ mod metadata;
 mod processor;
 mod scanner;
 mod state;
+mod tree;
 mod ui;
 
 use anyhow::{Context, Result};
