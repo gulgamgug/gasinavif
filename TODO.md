@@ -11,7 +11,7 @@
 - [x] **Fase 4: Manajemen Metadata & EXIF In-Process** ✅
 - [x] **Fase 5: Core Processing Engine (Tahap 1 & Tahap 2)** ✅
 - [x] **Fase 6: State Management, Resume, & Signal Handling (`Ctrl+C`)** ✅
-- [ ] **Fase 7: Tampilan Progress Bar & Laporan Akhir (`indicatif`)**
+- [x] **Fase 7: Tampilan Progress Bar & Laporan Akhir (`indicatif`)** ✅
 - [ ] **Fase 8: Pengujian, Benchmarking, & Distribusi Binary**
 
 ---
@@ -130,18 +130,18 @@
 
 ---
 
-### Fase 7: Tampilan Progress Bar & Laporan Akhir (`indicatif`)
-- [ ] Implementasi UI multi-bar:
-  - Bar 1: Progres Tahap 1 (RAW → JPG).
-  - Bar 2: Progres Tahap 2 (JPG → AVIF).
-- [ ] Format log verbose yang bersih (tidak merusak tampilan progress bar):
-  - `[OK-RAW]` / `[HAPUS-RAW]` / `[BATAL-RAW]`
-  - `[OK-AVIF]` / `[SKIP-TAG]` / `[BATAL-AVIF]`
-- [ ] Ringkasan statistik di akhir pemrosesan:
+### Fase 7: Tampilan Progress Bar & Laporan Akhir (`indicatif`) ✅
+- [x] Implementasi UI progress bar:
+  - Bar 1: Progres Tahap 1 (RAW → JPG) dengan timer elapsed, spinner, dan counter.
+  - Bar 2: Progres Tahap 2 (JPG → AVIF) dengan timer elapsed, spinner, dan counter.
+- [x] Format log badge berwarna yang konsisten dan bebas flicker (`pb.println`):
+  - `[OK-RAW]` (cyan) / `[HAPUS-RAW]` (magenta) / `[BATAL]` (yellow)
+  - `[OK-AVIF]` (green) / `[SKIP-TAG]` (dim) / `[GAGAL]` (red)
+- [x] Ringkasan statistik akhir berbingkai warna (*boxed colorful summary table*):
   - Ukuran folder awal vs ukuran folder akhir.
-  - Total megabyte/gigabyte yang berhasil dihemat.
-  - Persentase efisiensi penghematan (`saved %`).
-  - Total durasi eksekusi.
+  - Total megabyte/gigabyte yang berhasil dihemat dan persentase efisiensi.
+  - Durasi eksekusi dan kecepatan rata-rata (file/detik).
+- [x] Unit tests untuk formatting durasi, ukuran bytes, dan string badges.
 
 ---
 
