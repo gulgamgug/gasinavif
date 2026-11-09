@@ -10,7 +10,7 @@ use clap::Parser;
 use console::style;
 use rayon::prelude::*;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -57,6 +57,16 @@ fn main() -> Result<()> {
 
     println!();
 
+    // Bersihkan file sementara (*.tmp) dari sesi sebelumnya jika ada
+    let cleaned_tmps = scanner::clean_temp_files(&target_dir)?;
+    if cleaned_tmps > 0 && args.verbose {
+        println!(
+            "{} Membersihkan {} file temporary (.tmp) dari sesi sebelumnya.",
+            style("🧹").bold(),
+            cleaned_tmps
+        );
+    }
+
     // ── Fase 6: State management & Resume ──
     if args.fresh {
         println!("{} Menghapus state lama (--fresh)...", style("🗑").bold());
@@ -64,6 +74,35 @@ fn main() -> Result<()> {
     }
 
     let app_state = Arc::new(Mutex::new(state::AppState::load(&target_dir)?));
+
+    // Setup graceful shutdown handler untuk sinyal Ctrl+C (SIGINT / SIGTERM)
+    let interrupted = Arc::new(AtomicBool::new(false));
+    {
+        let interrupted_clone = Arc::clone(&interrupted);
+        let target_dir_clone = target_dir.clone();
+        let app_state_clone = Arc::clone(&app_state);
+
+        ctrlc::set_handler(move || {
+            interrupted_clone.store(true, Ordering::SeqCst);
+            eprintln!();
+            eprintln!("{}", style("==================================================================").yellow().bold());
+            eprintln!("{}", style("⚠️  [DIHENTIKAN] Proses dihentikan oleh pengguna (Ctrl+C).").yellow().bold());
+            eprintln!("Progres tersimpan di '.gasinavif_state/progress.json'.");
+            eprintln!("Jalankan ulang perintah yang sama kapan saja untuk melanjutkan!");
+            eprintln!("{}", style("==================================================================").yellow().bold());
+
+            // Simpan snapshot state terakhir
+            if let Ok(state) = app_state_clone.lock() {
+                let _ = state.save(&target_dir_clone);
+            }
+
+            // Bersihkan file .tmp yang setengah jadi
+            let _ = scanner::clean_temp_files(&target_dir_clone);
+
+            std::process::exit(130);
+        })
+        .context("Gagal mengaktifkan signal handler Ctrl+C")?;
+    }
 
     // ── Fase 3: Scanning direktori ──
     println!(
@@ -221,13 +260,16 @@ fn main() -> Result<()> {
         let pb = ui::create_progress_bar(stage1.len() as u64, "RAW → JPG");
 
         stage1.par_iter().for_each(|raw_path| {
+            if interrupted.load(Ordering::Relaxed) {
+                return;
+            }
+
             let res = processor::process_raw_to_jpg(raw_path, 98);
             pb.inc(1);
 
             match res {
                 Ok(processor::ProcessResult::Success { saved }) => {
                     stage1_processed.fetch_add(1, Ordering::Relaxed);
-                    // Dapatkan path JPG yang baru saja dibuat
                     let dir = raw_path.parent().unwrap_or_else(|| std::path::Path::new("."));
                     let stem = raw_path.file_stem().and_then(|s| s.to_str()).unwrap_or("raw");
                     let created_jpg = dir.join(format!("{stem}.jpg"));
@@ -310,6 +352,10 @@ fn main() -> Result<()> {
         let pb = ui::create_progress_bar(all_stage2.len() as u64, "JPG → AVIF");
 
         all_stage2.par_iter().for_each(|jpg_path| {
+            if interrupted.load(Ordering::Relaxed) {
+                return;
+            }
+
             let res = processor::process_jpg_to_avif(jpg_path, args.quality, args.speed);
             pb.inc(1);
 
@@ -383,6 +429,11 @@ fn main() -> Result<()> {
     let final_scan = scanner::scan_directory(&target_dir, false)?;
     let final_size = final_scan.total_original_size;
     let initial_size = scan.total_original_size;
+
+    // Bersihkan folder state karena seluruh pekerjaan tuntas
+    if !args.dry_run {
+        let _ = state::AppState::reset(&target_dir);
+    }
 
     // Cetak laporan statistik akhir
     ui::print_summary(

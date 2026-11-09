@@ -134,3 +134,54 @@ pub fn scan_directory(dir: &std::path::Path, _verbose: bool) -> anyhow::Result<S
 
     Ok(result)
 }
+
+/// Menghapus file sementara (*.tmp) yang mungkin tertinggal dari sesi crash / interupsi.
+pub fn clean_temp_files(dir: &std::path::Path) -> anyhow::Result<usize> {
+    use walkdir::WalkDir;
+    let mut count = 0;
+
+    for entry in WalkDir::new(dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        if entry.file_type().is_file() {
+            let path = entry.path();
+            if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                if ext.eq_ignore_ascii_case("tmp") {
+                    if std::fs::remove_file(path).is_ok() {
+                        count += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(count)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_clean_temp_files() {
+        let temp_dir = std::env::temp_dir().join("gasinavif_test_cleanup");
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        let tmp1 = temp_dir.join("photo1.avif.tmp");
+        let tmp2 = temp_dir.join("photo2.jpg.tmp");
+        let normal = temp_dir.join("normal.jpg");
+
+        std::fs::write(&tmp1, b"temp").unwrap();
+        std::fs::write(&tmp2, b"temp").unwrap();
+        std::fs::write(&normal, b"normal").unwrap();
+
+        let removed = clean_temp_files(&temp_dir).unwrap();
+        assert_eq!(removed, 2);
+        assert!(!tmp1.exists());
+        assert!(!tmp2.exists());
+        assert!(normal.exists());
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+}
