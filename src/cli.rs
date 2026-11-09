@@ -9,6 +9,10 @@ pub struct Args {
     #[arg(default_value = ".")]
     pub directory: PathBuf,
 
+    /// Buka menu pengaturan interaktif (TUI Settings)
+    #[arg(long)]
+    pub settings: bool,
+
     /// Reset all checkpoint state and start fresh
     #[arg(short, long)]
     pub fresh: bool,
@@ -18,12 +22,16 @@ pub struct Args {
     pub verbose: bool,
 
     /// AVIF encoding quality (1-100, lower = smaller file)
-    #[arg(short, long, default_value_t = 60)]
-    pub quality: u8,
+    #[arg(short, long)]
+    pub quality: Option<u8>,
 
     /// AVIF encoding speed (1-10, higher = faster but larger)
-    #[arg(short, long, default_value_t = 8)]
-    pub speed: u8,
+    #[arg(short, long)]
+    pub speed: Option<u8>,
+
+    /// Format subsampling chroma AVIF (420, 422, 444, 400)
+    #[arg(long)]
+    pub yuv: Option<String>,
 
     /// Number of parallel worker threads (default: number of CPU cores)
     #[arg(short = 'j', long)]

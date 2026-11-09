@@ -13,13 +13,9 @@
 - [x] **Fase 6: State Management, Resume, & Signal Handling (`Ctrl+C`)** ✅
 - [x] **Fase 7: Tampilan Progress Bar & Laporan Akhir (`indicatif`)** ✅
 - [x] **Fase 8: Pengujian, Benchmarking, & Distribusi Binary** ✅
-- [ ] **Sprint 9: Kontrol Interaktif & Monitoring Real-Time (Live TUI)** 🚀
-  - [ ] Estimasi waktu tersisa (ETA) & indikator kecepatan (*n* foto/detik) real-time.
-  - [ ] Hotkey `s` (Show Workers): Menampilkan file yang sedang diproses per core/thread secara dinamis.
-  - [ ] Hotkey `v` (Toggle Verbose): Toggle mode verbose secara on-the-fly saat program berjalan.
-  - [ ] Hotkey `t` (Adjust Threads): Mengatur jumlah thread pekerja secara dinamis saat kompresi berjalan.
-  - [ ] Hotkey `l` (Folder Tree Progress): Tampilan hierarki folder ala `tree` dengan progres counter dan spinner/checkmark per folder.
-  - [ ] Non-blocking terminal event loop via `crossterm` dan proteksi raw mode.
+- [x] **Sprint 9: Kontrol Interaktif & Monitoring Real-Time (Live TUI)** ✅
+- [x] **Sprint 10: Performa AVIF SIMD, Bug Fixing Terminal & Perapihan UI** ✅
+- [x] **Sprint 11: Pengaturan Interaktif (--settings) & Batasan Thread CPU** ✅
 
 ---
 
@@ -196,17 +192,17 @@
 
 ---
 
-### Sprint 11: Pengaturan Interaktif (--settings) & Batasan Thread CPU ⏳
-- [ ] **Sistem Konfigurasi Global Persisten**:
+### Sprint 11: Pengaturan Interaktif (--settings) & Batasan Thread CPU ✅
+- [x] **Sistem Konfigurasi Global Persisten**:
   - Simpan & muat konfigurasi di `~/.config/gasinavif/config.json`.
   - Field: `speed` (1-10), `quality` (1-100), `yuv` ("420", "422", "444", "400").
   - Auto-save saat keluar atau mengubah pengaturan, menjadi nilai default eksekusi selanjutnya.
-- [ ] **Menu TUI Interaktif (`--settings`)**:
+- [x] **Menu TUI Interaktif (`--settings`)**:
   - Menu utama navigasi panah atas/bawah dengan highlight warna dan pemilih Enter.
   - Submenu Speed: slider visual digeser kiri/kanan (`1..10`) dengan kotak penjelasan dinamis.
   - Submenu Kualitas (q): penyesuaian atas/bawah per-step 1 (`1..100`) dengan bar visual dan penjelasan rentang kualitas.
   - Submenu YUV Format: pilihan 444, 422, 420, 400 dengan penjelasan chroma subsampling.
   - Tombol kembali (Esc / q) dan auto-save otomatis.
-- [ ] **Proteksi & Pembatasan Thread CPU**:
+- [x] **Proteksi & Pembatasan Thread CPU**:
   - Cap jumlah thread paralel maksimal sebesar jumlah core/thread logis CPU komputer (`available_parallelism`).
   - Cegah penambahan thread via argumen `-j` maupun hotkey interaktif `t`/`+` melampaui batas kemampuan CPU fisik/logis.

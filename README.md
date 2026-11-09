@@ -98,16 +98,35 @@ Arguments:
   [DIRECTORY]  Target directory to process [default: .]
 
 Options:
+      --settings           Buka antarmuka interaktif pengaturan global (TUI Settings)
   -f, --fresh              Reset checkpoint state dan mulai dari awal
   -v, --verbose            Tampilkan log detail per file
-  -q, --quality <QUALITY>  Kualitas AVIF, 1-100 (default: 60)
-  -s, --speed <SPEED>      Kecepatan encoder, 1-10 (default: 8)
-  -j, --threads <THREADS>  Jumlah thread paralel (default: semua core)
+  -q, --quality <QUALITY>  Kualitas AVIF, 1-100 (default: 60 / dari config)
+  -s, --speed <SPEED>      Kecepatan encoder, 1-10 (default: 8 / dari config)
+      --yuv <YUV>          Format chroma subsampling: 420, 422, 444, 400 (default: 420)
+  -j, --threads <THREADS>  Jumlah thread paralel (dibatasi maksimal core CPU)
       --dry-run            Simulasi tanpa menulis/menghapus file
       --keep-raw           Pertahankan file RAW meskipun JPG sudah ada
   -h, --help               Tampilkan bantuan
   -V, --version            Tampilkan versi
 ```
+
+### ⚙️ Pengaturan Global Interaktif (`gasinavif --settings`)
+
+Gasinavif menyediakan menu TUI interaktif untuk mengatur konfigurasi global yang disimpan permanen di `~/.config/gasinavif/config.json`:
+
+```bash
+gasinavif --settings
+```
+
+Fitur menu pengaturan:
+- **Navigasi Intuitif**: Panah Atas/Bawah (`↑`/`↓`) untuk berpindah menu dengan highlight warna, `Enter` untuk membuka submenu, dan `Esc` / `q` untuk kembali.
+- **Slider Kecepatan (Speed 1–10)**: Geser kiri/kanan (`←`/`→`) dengan panduan dinamis kompromi kecepatan vs kompresi.
+- **Pengatur Kualitas (Quality 1–100)**: Penyesuaian step 1 (`↑`/`↓`) atau step 10 (`PgUp`/`PgDn`) dengan bar visual dan penjelasan rentang kualitas.
+- **Pemilih Format Chroma (YUV)**: Pilihan format `420` (default kompatibel), `422`, `444` (full color), atau `400` (monokrom).
+- **Auto-Save Otomatis**: Setiap perubahan langsung tersimpan ke disk dan menjadi default untuk semua sesi berikutnya tanpa perlu konfigurasi ulang.
+- **Proteksi Alokasi Thread**: Penggunaan worker thread dibatasi secara otomatis sebesar jumlah thread logis CPU perangkat (tidak akan membebani CPU secara berlebihan).
+
 
 ### 🎮 Kontrol Interaktif Saat Program Berjalan (Live Hotkeys)
 

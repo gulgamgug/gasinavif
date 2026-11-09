@@ -42,6 +42,7 @@ pub fn process_jpg_to_avif(
     jpg_path: &Path,
     quality: u8,
     speed: u8,
+    yuv: &str,
 ) -> Result<ProcessResult> {
     // 1. Cek metadata tag di awal (anti-loop)
     if metadata::is_already_tagged(jpg_path)? {
@@ -71,7 +72,7 @@ pub fn process_jpg_to_avif(
             .arg("--speed")
             .arg(speed.to_string())
             .arg("--yuv")
-            .arg("420")
+            .arg(yuv)
             .arg("-j")
             .arg("1") // 1 worker thread per file karena dynamic pool kita sudah multi-threaded
             .stdout(std::process::Stdio::null())
@@ -258,7 +259,7 @@ mod tests {
         }
         img.save(&test_jpg).expect("Gagal membuat test JPEG");
 
-        let res = process_jpg_to_avif(&test_jpg, 50, 9).expect("Gagal memproses JPG ke AVIF");
+        let res = process_jpg_to_avif(&test_jpg, 50, 9, "420").expect("Gagal memproses JPG ke AVIF");
 
         match res {
             ProcessResult::Success { saved } => {

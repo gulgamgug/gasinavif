@@ -1,8 +1,10 @@
 mod cli;
+mod config;
 mod interactive;
 mod metadata;
 mod processor;
 mod scanner;
+mod settings;
 mod state;
 mod tree;
 mod ui;
@@ -20,10 +22,26 @@ fn main() -> Result<()> {
     rexiv2::set_log_level(rexiv2::LogLevel::MUTE);
 
     let args = cli::Args::parse();
+
+    // Jika dipanggil dengan flag --settings, luncurkan antarmuka interaktif konfigurasi global
+    if args.settings {
+        settings::run_settings_menu()?;
+        return Ok(());
+    }
+
     let start_time = Instant::now();
 
-    // Default thread: jumlah logical core CPU jika tidak dispesifikasikan
-    let initial_threads = args.threads.unwrap_or_else(num_cpus_available);
+    // Muat konfigurasi global persisten (~/.config/gasinavif/config.json)
+    let global_config = config::AppConfig::load();
+
+    // Batasi threads maksimal sebesar jumlah logical core CPU yang tersedia
+    let max_cpus = num_cpus_available();
+    let initial_threads = args.threads.unwrap_or(max_cpus).min(max_cpus);
+
+    // Prioritas pengaturan: CLI flag eksplisit > Konfigurasi global > Default
+    let quality = args.quality.unwrap_or(global_config.quality).clamp(1, 100);
+    let speed = args.speed.unwrap_or(global_config.speed).clamp(1, 10);
+    let yuv = args.yuv.unwrap_or(global_config.yuv);
 
     // Resolve direktori target
     let target_dir = std::fs::canonicalize(&args.directory)
@@ -39,10 +57,12 @@ fn main() -> Result<()> {
         style(target_dir.display()).cyan()
     );
     println!(
-        "   Quality : {} | Speed: {} | Initial Threads: {}",
-        style(args.quality).yellow(),
-        style(args.speed).yellow(),
+        "   Quality : {} | Speed: {} | YUV: {} | Threads: {} (Max: {})",
+        style(quality).yellow(),
+        style(speed).yellow(),
+        style(&yuv).magenta(),
         style(initial_threads).yellow(),
+        style(max_cpus).cyan(),
     );
 
     if args.dry_run {
@@ -70,7 +90,7 @@ fn main() -> Result<()> {
     let app_state = Arc::new(Mutex::new(state::AppState::load(&target_dir)?));
 
     // ── Inisialisasi Live Controller ──
-    let controller = Arc::new(interactive::LiveController::new(initial_threads, args.verbose));
+    let controller = Arc::new(interactive::LiveController::new(initial_threads, max_cpus, args.verbose));
 
     // Setup signal handler Ctrl+C (fallback di samping hotkey listener)
     {
@@ -330,8 +350,7 @@ fn main() -> Result<()> {
     if !all_stage2.is_empty() && !args.dry_run && !controller.is_interrupted.load(Ordering::Relaxed) {
         println!("{}", style("==> [Tahap 2/2] Memproses File JPG ke AVIF...").bold().green());
         let tree_stage2 = Arc::new(tree::build_folder_tree(&target_dir, &all_stage2));
-        let quality = args.quality;
-        let speed = args.speed;
+        let yuv_format = yuv.clone();
 
         interactive::execute_with_dynamic_workers(
             all_stage2,
@@ -343,9 +362,10 @@ fn main() -> Result<()> {
                 let skipped_count = Arc::clone(&skipped_count);
                 let app_state = Arc::clone(&app_state);
                 let ctrl = Arc::clone(&controller);
+                let yuv_format = yuv_format.clone();
 
                 move |jpg_path: &Path, node: &tree::FolderNode| {
-                    let res = processor::process_jpg_to_avif(jpg_path, quality, speed);
+                    let res = processor::process_jpg_to_avif(jpg_path, quality, speed, &yuv_format);
                     let parent = jpg_path.parent().unwrap_or(Path::new("."));
                     node.record_file_completed(parent);
 
