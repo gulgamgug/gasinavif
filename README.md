@@ -1,59 +1,89 @@
-# 📸 gasinavif
+# gasinavif
 
-**High-performance CLI tool for camera photo compression** — mengotomasi konversi foto kamera dari format RAW dan JPG ke AVIF dengan kompresi optimal, metadata EXIF terjaga, dan sistem checkpoint/resume.
+A high-performance CLI tool for camera photo compression (RAW -> JPG -> AVIF) written in Rust.
 
-Ditulis sepenuhnya dalam **Rust** 🦀 untuk kecepatan maksimal.
-
----
-
-## ✨ Fitur Utama
-
-- **🔄 Pipeline Dua Tahap**
-  - **Tahap 1**: RAW → JPG (decode format kamera: CR2, CR3, ARW, NEF, DNG, dll.)
-  - **Tahap 2**: JPG → AVIF (kompresi AV1 modern, hemat 40-80% ukuran file)
-
-- **🧠 Deteksi Pasangan Cerdas (RAW + JPG)**
-  - Mendeteksi file RAW yang sudah memiliki pasangan JPG dari kamera (dual-format shooting)
-  - RAW duplikat otomatis dihapus, JPG langsung masuk antrean AVIF
-
-- **🏷️ Metadata EXIF Terjaga**
-  - Semua metadata EXIF (aperture, shutter speed, ISO, GPS, dll.) disalin ke file hasil
-  - Tag `COMPRESSED_BY_SCRIPT` ditanamkan untuk proteksi anti-loop
-
-- **⚡ Multi-Threaded & Blazingly Fast**
-  - Work-stealing threadpool via `rayon` — memanfaatkan seluruh core CPU
-  - Pembacaan metadata EXIF secara native (tanpa spawn `exiftool`) — 100-500x lebih cepat
-
-- **💾 Checkpoint & Resume**
-  - Progres disimpan ke `.gasinavif_state/progress.json`
-  - Jika dihentikan (`Ctrl+C`), proses bisa langsung dilanjutkan tanpa mengulang file yang sudah selesai
-  - File sementara (`*.tmp`) otomatis dibersihkan saat interupsi
-
-- **📊 Laporan Statistik**
-  - Ukuran folder sebelum & sesudah
-  - Total penghematan dalam MB/GB dan persentase
-  - Durasi eksekusi
+`gasinavif` automates the ingestion, deduplication, and modern AVIF compression of large photography archives while preserving complete EXIF metadata, original timestamps, and directory structures.
 
 ---
 
-## 📦 Instalasi
+## Key Features
 
-### Prasyarat
+- **Two-Stage Conversion Pipeline**:
+  - **Stage 1**: Decodes camera RAW formats (`.cr2`, `.cr3`, `.arw`, `.nef`, `.dng`, etc.) into high-quality JPEG by extracting embedded preview streams via `gexiv2`, with ImageMagick as an automatic fallback.
+  - **Stage 2**: Encodes JPEG files to modern AVIF format, typically saving 40% to 85% disk space compared to original JPEGs.
+- **Intelligent Pairing & Deduplication**:
+  - Automatically detects paired RAW + JPG files produced by camera dual-format shooting.
+  - Safely deletes duplicate RAW files while sending the camera-rendered JPG directly to Stage 2.
+- **SIMD-Accelerated Performance**:
+  - Prioritizes external `avifenc` (SIMD-optimized `libaom` + `libjpeg-turbo`) for encoding speeds (~0.5s per image).
+  - Automatically falls back to an embedded pure-Rust `ravif` encoder if `avifenc` is not installed or encounters unusual color profiles.
+- **Full EXIF & Timestamp Preservation**:
+  - Copies all EXIF metadata (exposure, aperture, ISO, lens data, GPS coordinates, color profiles).
+  - Preserves original file modification timestamps (`mtime`).
+  - Injects a `COMPRESSED_BY_SCRIPT=true` tag into metadata to eliminate circular re-compression.
+- **Size Increase Protection**:
+  - Compares the final AVIF size against the original JPEG.
+  - If the compressed file is equal to or larger than the source, the temporary AVIF is discarded, the original JPEG is preserved, and marked with a `SKIPPED_LARGER` tag.
+- **Crash Recovery & Checkpointing**:
+  - Records real-time completion state in `.gasinavif_state/progress.json`.
+  - Safely handles interruptions (`Ctrl+C` or `q`): immediately cleans up partial `.tmp` files and preserves progress so execution can resume instantly.
+- **Interactive Terminal UI (Live Controls)**:
+  - Non-blocking runtime hotkeys to monitor active worker threads, inspect folder tree progress, toggle verbose logs, and dynamically reconfigure thread counts without restarting.
+- **Persistent Global Configuration**:
+  - Dedicated interactive settings interface (`gasinavif --settings`) with auto-save to `~/.config/gasinavif/config.json`.
+- **CPU Core Thread Capping**:
+  - Enforces an upper bound on worker threads matching the host machine's logical core capacity (`available_parallelism`), preventing CPU thrashing and system instability.
 
-- [Rust toolchain](https://rustup.rs/) (rustc ≥ 1.75)
-- NASM assembler (opsional, untuk optimasi encoding AV1):
-  ```bash
-  # Arch Linux
-  sudo pacman -S nasm
+---
 
-  # Ubuntu / Debian
-  sudo apt install nasm
+## Dependencies & Prerequisites
 
-  # macOS
-  brew install nasm
-  ```
+### Build Dependencies
+Building `gasinavif` requires a standard Rust toolchain (Rust 2024 / rustc >= 1.75) alongside C libraries for EXIF parsing:
 
-### Build dari Source
+- **Rust toolchain** (`cargo`, `rustc`)
+- **pkg-config** / **pkgconf**
+- **libgexiv2** and **exiv2** (development headers)
+- **nasm** (Netwide Assembler, required for SIMD assembly in pure-Rust AV1 routines)
+
+### Runtime Dependencies (Recommended)
+While `gasinavif` can run standalone using its built-in Rust encoder, the following system utilities are strongly recommended for maximum encoding throughput:
+
+- **avifenc** (from `libavif`): Provides hardware-accelerated SIMD AVIF encoding (10-15x faster than pure-Rust fallback).
+- **imagemagick** (`magick`): Fallback decoder for rare camera RAW files lacking embedded JPEG previews.
+
+---
+
+### Installing Dependencies
+
+#### Arch Linux / Manjaro
+```bash
+sudo pacman -S --needed base-devel rust pkgconf libgexiv2 exiv2 nasm libavif imagemagick
+```
+
+#### Debian / Ubuntu / Linux Mint
+```bash
+sudo apt update
+sudo apt install -y build-essential cargo pkg-config libgexiv2-dev libexiv2-dev nasm libavif-bin imagemagick
+```
+
+#### Fedora / RHEL
+```bash
+sudo dnf install -y gcc gcc-c++ cargo pkgconf-pkg-config libgexiv2-devel exiv2-devel nasm libavif-tools ImageMagick
+```
+
+#### macOS (Homebrew)
+```bash
+brew install rust pkg-config gexiv2 exiv2 nasm libavif imagemagick
+```
+
+---
+
+## Installation
+
+### Building from Source
+
+Clone the repository and compile the release binary:
 
 ```bash
 git clone https://github.com/raihanlazuardi/gasinavif.git
@@ -61,134 +91,130 @@ cd gasinavif
 cargo build --release
 ```
 
-Binary akan tersedia di `target/release/gasinavif`.
+The optimized binary will be created at `target/release/gasinavif`.
 
-### Instalasi ke PATH
+### Installing to PATH
+
+Copy the compiled binary to your local user executable path:
 
 ```bash
-cp target/release/gasinavif ~/.local/bin/
+install -Dm755 target/release/gasinavif ~/.local/bin/gasinavif
+```
+
+Ensure `~/.local/bin` is in your shell `$PATH`.
+
+---
+
+## Usage
+
+### Basic Commands
+
+```bash
+# Process all photos in the current directory
+gasinavif
+
+# Process a specific target directory
+gasinavif ~/Pictures/2024-Vacation
+
+# Run with detailed real-time logs
+gasinavif -v ~/Pictures
+
+# Dry-run mode: analyze counts and sizes without modifying or deleting files
+gasinavif --dry-run ~/Pictures
+
+# Re-scan from scratch, ignoring previous checkpoints
+gasinavif --fresh ~/Pictures
 ```
 
 ---
 
-## 🚀 Penggunaan
-
-### Perintah Dasar
-
-```bash
-# Proses semua foto di direktori saat ini
-gasinavif
-
-# Proses direktori tertentu
-gasinavif ~/Pictures/2024-Vacation
-
-# Mode verbose (lihat detail per file)
-gasinavif -v ~/Pictures
-
-# Dry-run (analisis tanpa mengubah file)
-gasinavif --dry-run ~/Pictures
-```
-
-### Opsi Lengkap
+### Command-Line Options
 
 ```
 Usage: gasinavif [OPTIONS] [DIRECTORY]
 
 Arguments:
-  [DIRECTORY]  Target directory to process [default: .]
+  [DIRECTORY]              Target directory to process [default: .]
 
 Options:
-      --settings           Buka antarmuka interaktif pengaturan global (TUI Settings)
-  -f, --fresh              Reset checkpoint state dan mulai dari awal
-  -v, --verbose            Tampilkan log detail per file
-  -q, --quality <QUALITY>  Kualitas AVIF, 1-100 (default: 60 / dari config)
-  -s, --speed <SPEED>      Kecepatan encoder, 1-10 (default: 8 / dari config)
-      --yuv <YUV>          Format chroma subsampling: 420, 422, 444, 400 (default: 420)
-  -j, --threads <THREADS>  Jumlah thread paralel (dibatasi maksimal core CPU)
-      --dry-run            Simulasi tanpa menulis/menghapus file
-      --keep-raw           Pertahankan file RAW meskipun JPG sudah ada
-  -h, --help               Tampilkan bantuan
-  -V, --version            Tampilkan versi
+      --settings           Open interactive global configuration menu (TUI)
+  -f, --fresh              Reset all checkpoint state and start fresh
+  -v, --verbose            Show detailed per-file processing logs
+  -q, --quality <QUALITY>  AVIF encoding quality (1-100, default: 60 or config)
+  -s, --speed <SPEED>      AVIF encoding speed (1-10, default: 8 or config)
+      --yuv <YUV>          Chroma subsampling format: 420, 422, 444, 400 (default: 420)
+  -j, --threads <THREADS>  Number of parallel worker threads (capped at CPU cores)
+      --dry-run            Analyze and report without writing or deleting files
+      --keep-raw           Keep RAW files even when a matching JPG already exists
+  -h, --help               Print help information
+  -V, --version            Print version
 ```
 
-### ⚙️ Pengaturan Global Interaktif (`gasinavif --settings`)
+---
 
-Gasinavif menyediakan menu TUI interaktif untuk mengatur konfigurasi global yang disimpan permanen di `~/.config/gasinavif/config.json`:
+## Global Configuration (`gasinavif --settings`)
+
+`gasinavif` includes an interactive Terminal User Interface (TUI) to adjust global defaults saved persistently to `~/.config/gasinavif/config.json`.
 
 ```bash
 gasinavif --settings
 ```
 
-Fitur menu pengaturan:
-- **Navigasi Intuitif**: Panah Atas/Bawah (`↑`/`↓`) untuk berpindah menu dengan highlight warna, `Enter` untuk membuka submenu, dan `Esc` / `q` untuk kembali.
-- **Slider Kecepatan (Speed 1–10)**: Geser kiri/kanan (`←`/`→`) dengan panduan dinamis kompromi kecepatan vs kompresi.
-- **Pengatur Kualitas (Quality 1–100)**: Penyesuaian step 1 (`↑`/`↓`) atau step 10 (`PgUp`/`PgDn`) dengan bar visual dan penjelasan rentang kualitas.
-- **Pemilih Format Chroma (YUV)**: Pilihan format `420` (default kompatibel), `422`, `444` (full color), atau `400` (monokrom).
-- **Auto-Save Otomatis**: Setiap perubahan langsung tersimpan ke disk dan menjadi default untuk semua sesi berikutnya tanpa perlu konfigurasi ulang.
-- **Proteksi Alokasi Thread**: Penggunaan worker thread dibatasi secara otomatis sebesar jumlah thread logis CPU perangkat (tidak akan membebani CPU secara berlebihan).
+### Navigation & Menus
+- **Main Menu**: Navigate with `Up` / `Down` arrow keys (or `k` / `j`), press `Enter` to enter a submenu, or `Esc` / `q` to exit.
+- **Speed Submenu (1-10)**: Adjust the horizontal slider with `Left` / `Right` arrows. Lower values yield maximum compression ratio; values 8-10 provide rapid encoding (~0.5s/image).
+- **Quality Submenu (1-100)**: Adjust in steps of 1 (`Up` / `Down`) or steps of 10 (`PgUp` / `PgDn`) with visual percentage progress.
+- **Chroma Subsampling (YUV)**:
+  - `420`: Industry default; maximum compatibility and best file size reduction.
+  - `422`: Horizontal subsampling; balanced color fidelity for sharp edges.
+  - `444`: Full 1:1 color resolution; lossless color detail.
+  - `400`: Monochrome / grayscale.
+- **Auto-Save**: Changes take effect immediately across all subsequent standard runs without extra confirmation steps.
+- **Resolution Priority**: CLI flags (`-q`, `-s`, `--yuv`) > Persistent Config (`config.json`) > Built-in defaults.
 
+---
 
-### 🎮 Kontrol Interaktif Saat Program Berjalan (Live Hotkeys)
+## Live Interactive Controls
 
-Saat proses kompresi sedang berjalan di terminal, Anda dapat menekan tombol pintas (*hotkey*) berikut secara langsung tanpa perlu menekan Enter:
+While compression is executing, press the following single-key shortcuts at any time without pressing Enter:
 
-| Tombol | Aksi | Deskripsi |
+| Key | Mode | Description |
 | :---: | :--- | :--- |
-| **`s`** | **Show Active Workers** | Toggle tampilan nama file yang sedang aktif diproses per core/thread. |
-| **`v`** | **Toggle Verbose** | Mengaktifkan/menonaktifkan log detail per file secara *on-the-fly*. |
-| **`t`** / **`+`** / **`-`** | **Adjust Threads** | Mengatur jumlah worker thread secara dinamis saat proses berjalan (`+` tambah, `-` kurang). |
-| **`l`** | **Folder Tree Progress** | Toggle tampilan struktur pohon folder beserta progres file dan animasi status per folder. |
-| **`q`** | **Quit / Graceful Stop** | Menghentikan proses dengan aman, membersihkan file `.tmp`, dan menyimpan state. |
+| **`s`** | **Show Active Workers** | Toggles a live panel displaying current files being processed by each CPU worker. |
+| **`v`** | **Toggle Verbose** | Toggles per-file completion logs (`[OK-AVIF]`, `[OK-RAW]`, etc.) on the fly. |
+| **`t`** | **Cycle Threads** | Cycles active worker thread allocations between standard increments. |
+| **`+`** / **`-`** | **Adjust Threads** | Increases or decreases parallel workers by 1 (strictly capped at host logical CPU count). |
+| **`l`** | **Folder Tree Progress** | Toggles an indented directory tree hierarchy displaying completed/total files and status spinners per folder. |
+| **`q`** | **Graceful Stop** | Flushes active tasks, clears temporary `.tmp` files, saves progress state, and exits cleanly. |
 
-#### Contoh Tampilan Tree Mode (`l`):
+### Example Display: Folder Tree Mode (`l`)
 ```text
-  ── 📁 Hierarki Folder & Progres ──
-  Vacation                         ⠋ 12/45
-  ├── Beach                        ✔ 20/20
-  └── Mountain                     ⠙ 5/15
-  Studio                           ✔ 10/10
-  ⠋ JPG → AVIF [00:00:15] [██████████████████████████████] 47/90 (52%) | 4.8 foto/s | ETA: 00:09
-    [ s:show (OFF) | l:tree (ON) | v:verbose (OFF) | t:threads (12) | q:quit ]
+  ── Directory Hierarchy & Progress ──
+  Vacation                         [⠋] 12/45
+  ├── Beach                        [✔] 20/20
+  └── Mountain                     [⠙]  5/15
+  Studio                           [✔] 10/10
+  JPG -> AVIF [00:15] [████████████████████] 47/90 (52%) | 4.8 photos/s | ETA: 00:09
+  [ s:show (OFF) | l:tree (ON) | v:verbose (OFF) | t:threads (12) | q:quit ]
 ```
 
-#### Contoh Tampilan Active Workers Mode (`s`):
+### Example Display: Active Workers Mode (`s`)
 ```text
-  ── ⚡ Status Pekerja (Active Threads: 12) ──
-    [Core  0] /photos/Vacation/Beach/beach_01.jpg
-    [Core  1] /photos/Vacation/Beach/beach_02.jpg
-    [Core  2] /photos/Studio/model_05.jpg
+  ── Active Worker Threads (12 Cores) ──
+    [Core  0] .../Vacation/Beach/IMG_2024.jpg
+    [Core  1] .../Vacation/Beach/IMG_2025.jpg
+    [Core  2] .../Studio/portrait_01.jpg
     [Core  3] (idle)
     ...
-  ⠋ JPG → AVIF [00:00:15] [██████████████████████████████] 47/90 (52%) | 4.8 foto/s | ETA: 00:09
-    [ s:show (ON) | l:tree (OFF) | v:verbose (OFF) | t:threads (12) | q:quit ]
-```
-
-### Contoh Skenario
-
-#### Foto liburan dengan kamera DSLR (dual-format RAW+JPG)
-```bash
-# gasinavif otomatis mendeteksi pasangan RAW+JPG,
-# menghapus RAW duplikat, dan mengkompresi JPG ke AVIF
-gasinavif ~/Pictures/2024-Bali/
-```
-
-#### Koleksi RAW saja (studio / profesional)
-```bash
-# RAW di-decode ke JPG dulu, lalu JPG dikompresi ke AVIF
-# Kualitas lebih tinggi untuk hasil cetak
-gasinavif -q 75 ~/Pictures/Studio-Shoot/
-```
-
-#### Preview cepat tanpa mengubah file
-```bash
-gasinavif --dry-run -v ~/Pictures/
+  JPG -> AVIF [00:15] [████████████████████] 47/90 (52%) | 4.8 photos/s | ETA: 00:09
+  [ s:show (ON) | l:tree (OFF) | v:verbose (OFF) | t:threads (12) | q:quit ]
 ```
 
 ---
 
-## 📁 Format RAW yang Didukung
+## Supported Camera RAW Formats
 
-| Merek Kamera | Ekstensi |
+| Manufacturer | Extensions |
 |---|---|
 | Canon | `.cr2`, `.cr3` |
 | Sony | `.arw`, `.srf`, `.sr2` |
@@ -199,75 +225,74 @@ gasinavif --dry-run -v ~/Pictures/
 | Olympus | `.orf` |
 | Pentax | `.pef` |
 
+Standard `.jpg` and `.jpeg` images are processed directly.
+
 ---
 
-## ⚙️ Cara Kerja
+## Processing Architecture
 
 ```
-                    ┌─────────────────────┐
-                    │   Scan Direktori    │
-                    │   (walkdir, O(N))   │
-                    └────────┬────────────┘
-                             │
-                    ┌────────▼────────────┐
-                    │  Grouping by Stem   │
-                    │  (HashMap in-RAM)   │
-                    └────────┬────────────┘
-                             │
-              ┌──────────────┼──────────────┐
-              │              │              │
-     RAW + JPG ada      Hanya RAW      Hanya JPG
-              │              │              │
-        Hapus RAW     Tahap 1: Decode    Langsung
-              │        RAW → JPG            │
-              │              │              │
-              └──────────────┼──────────────┘
-                             │
-                    ┌────────▼────────────┐
-                    │   Tahap 2: Encode   │
-                    │   JPG → AVIF        │
-                    │   (ravif / rav1e)   │
-                    └────────┬────────────┘
-                             │
-                    ┌────────▼────────────┐
-                    │ Validasi Ukuran     │
-                    │ avif < jpg? Simpan  │
-                    │ avif ≥ jpg? Skip    │
-                    └────────┬────────────┘
-                             │
-                    ┌────────▼────────────┐
-                    │   Laporan Akhir     │
-                    │   📊 Statistik      │
-                    └─────────────────────┘
+                    ┌─────────────────────────┐
+                    │ Directory Traversal     │
+                    │ (walkdir, O(N))         │
+                    └────────────┬────────────┘
+                                 │
+                    ┌────────────▼────────────┐
+                    │ Group Files by Stem     │
+                    │ (In-memory grouping)    │
+                    └────────────┬────────────┘
+                                 │
+               ┌─────────────────┼─────────────────┐
+               │                 │                 │
+        RAW + JPG Exists      RAW Only          JPG Only
+               │                 │                 │
+         Delete RAW         Stage 1: Decode        │
+               │            RAW -> JPG             │
+               │                 │                 │
+               └─────────────────┼─────────────────┘
+                                 │
+                    ┌────────────▼────────────┐
+                    │ Stage 2: AVIF Encoding  │
+                    │ (avifenc SIMD / ravif)  │
+                    └────────────┬────────────┘
+                                 │
+                    ┌────────────▼────────────┐
+                    │ Size Verification       │
+                    │ AVIF < JPG: Replace     │
+                    │ AVIF >= JPG: Keep JPG   │
+                    └────────────┬────────────┘
+                                 │
+                    ┌────────────▼────────────┐
+                    │ Summary Statistics Box  │
+                    └─────────────────────────┘
 ```
 
 ---
 
-## 🛡️ Proteksi & Keamanan
+## Safety & Integrity Protections
 
-- **Anti-loop**: File yang sudah ditandai `COMPRESSED_BY_SCRIPT` tidak akan diproses ulang
-- **Validasi ukuran**: Jika hasil kompresi lebih besar dari aslinya, file asli dipertahankan
-- **Graceful shutdown**: `Ctrl+C` membersihkan file `.tmp` yang belum selesai
-- **Resume**: Proses bisa dilanjutkan kapan saja tanpa kehilangan progres
-
----
-
-## 🏗️ Tech Stack
-
-| Komponen | Library |
-|---|---|
-| CLI Parser | `clap` v4 (derive) |
-| Parallelism | `rayon` |
-| Progress Bar | `indicatif` |
-| Dir Traversal | `walkdir` |
-| RAW Decoding | `rawloader` (pure Rust) |
-| AVIF Encoding | `ravif` + `rav1e` (pure Rust) |
-| EXIF Metadata | `kamadak-exif` + `img-parts` |
-| State / Resume | `serde_json` |
-| Signal Handling | `ctrlc` |
+1. **Anti-Loop Prevention**: Inspects files for `COMPRESSED_BY_SCRIPT=true` in EXIF UserComment and XMP metadata fields; previously processed images are skipped instantly.
+2. **Size Regression Guard**: Compresses to an intermediate `.avif.tmp` file and compares sizes. If compression produces a larger file, the temporary file is deleted and the source is marked with `STATUS=SKIPPED_LARGER`.
+3. **Atomic File Swapping**: Original files are only replaced after the temporary target file is fully written and verified on disk.
+4. **Safe Interrupts**: Handles `SIGINT` / `SIGTERM` signals and the `q` key cleanly, removing pending temporary files and recording current progress to disk.
 
 ---
 
-## 📄 Lisensi
+## Architecture & Crates
 
-MIT License — Silakan digunakan dan dimodifikasi sesuai kebutuhan.
+| Component | Library | Purpose |
+|---|---|---|
+| CLI Parsing | `clap` v4 | Command-line argument parsing with derive macros |
+| Parallelism | `rayon` | Multi-threaded work-stealing job dispatcher |
+| Terminal UI & Controls | `crossterm`, `console` | Non-blocking keyboard event loop and TUI rendering |
+| Image Decoding & Fallback | `image`, `ravif` | Embedded pure-Rust raster decoder and fallback encoder |
+| EXIF & Metadata | `rexiv2`, `kamadak-exif`, `img-parts` | In-process native EXIF extraction, injection, and cloning |
+| State & Serialization | `serde`, `serde_json` | Checkpointing and resume progress tracking |
+| Signal Handling | `ctrlc` | Interruption capturing and cleanup coordination |
+| File Timestamps | `filetime` | Preserving source modification dates (`mtime`) |
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
