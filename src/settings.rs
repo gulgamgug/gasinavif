@@ -6,7 +6,7 @@
 //!   - Pemilih format chroma subsampling (YUV: 420, 422, 444, 400).
 //!   - Auto-save otomatis ke disk (~/.config/gasinavif/config.json) saat keluar/berpindah.
 
-use console::style;
+use console::{measure_text_width, style};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use std::io::{stdout, IsTerminal, Write};
 use std::time::Duration;
@@ -189,12 +189,12 @@ pub fn run_settings_menu() -> anyhow::Result<()> {
 
     println!();
     println!("{}", style("╔══════════════════════════════════════════════════════════════╗").green().bold());
-    println!("{}", style("║              ✅  PENGATURAN BERHASIL DISIMPAN                ║").green().bold());
+    println!("{}", box_center(&style("✅  PENGATURAN BERHASIL DISIMPAN").green().bold().to_string()));
     println!("{}", style("╠══════════════════════════════════════════════════════════════╣").green());
-    println!("║  • Kecepatan (Speed)         : {:<29} ║", style(format!("{} (1-10)", config.speed)).yellow().bold());
-    println!("║  • Kualitas (Quality)        : {:<29} ║", style(format!("{} / 100", config.quality)).cyan().bold());
-    println!("║  • Format Chroma (YUV)       : {:<29} ║", style(format!("YUV {}", config.yuv)).magenta().bold());
-    println!("║  • Lokasi File Config        : {:<29} ║", style("~/.config/gasinavif/config.json").dim());
+    println!("{}", box_row(&format!("• Kecepatan (Speed)         : {}", style(format!("{} (1-10)", config.speed)).yellow().bold()), 2));
+    println!("{}", box_row(&format!("• Kualitas (Quality)        : {}", style(format!("{} / 100", config.quality)).cyan().bold()), 2));
+    println!("{}", box_row(&format!("• Format Chroma (YUV)       : {}", style(format!("YUV {}", config.yuv)).magenta().bold()), 2));
+    println!("{}", box_row(&format!("• File Konfigurasi          : {}", style("~/.config/gasinavif/config.json").dim()), 2));
     println!("{}", style("╚══════════════════════════════════════════════════════════════╝").green().bold());
     println!();
 
@@ -203,9 +203,9 @@ pub fn run_settings_menu() -> anyhow::Result<()> {
 
 fn render_main_menu(config: &AppConfig, selected: usize, lines: &mut Vec<String>) {
     lines.push(style("╔══════════════════════════════════════════════════════════════╗").cyan().bold().to_string());
-    lines.push(style("║                ⚙️   PENGATURAN GLOBAL GASINAVIF               ║").bold().white().to_string());
+    lines.push(box_center(&style("⚙️   PENGATURAN GLOBAL GASINAVIF").bold().white().to_string()));
     lines.push(style("╠══════════════════════════════════════════════════════════════╣").cyan().to_string());
-    lines.push("║                                                              ║".to_string());
+    lines.push(box_empty());
 
     let items = [
         format!("1. Kecepatan Encoder (Speed)  : [ {:>2} ]", config.speed),
@@ -216,25 +216,25 @@ fn render_main_menu(config: &AppConfig, selected: usize, lines: &mut Vec<String>
 
     for (i, item) in items.iter().enumerate() {
         if i == selected {
-            let row = format!("▶  {:<54}", item);
-            lines.push(format!("║  {}  ║", style(row).green().bold().underlined()));
+            let row = format!("▶  {item}");
+            lines.push(box_row(&style(row).green().bold().underlined().to_string(), 2));
         } else {
-            let row = format!("   {:<54}", item);
-            lines.push(format!("║  {}  ║", style(row).white()));
+            let row = format!("   {item}");
+            lines.push(box_row(&style(row).white().to_string(), 2));
         }
     }
 
-    lines.push("║                                                              ║".to_string());
+    lines.push(box_empty());
     lines.push(style("╠══════════════════════════════════════════════════════════════╣").cyan().to_string());
-    lines.push("║  [↑/↓] Pilih Menu  |  [Enter] Masuk  |  [Esc/q] Simpan & Out ║".to_string());
+    lines.push(box_center("[↑/↓] Pilih Menu  |  [Enter] Masuk  |  [Esc/q] Simpan & Out"));
     lines.push(style("╚══════════════════════════════════════════════════════════════╝").cyan().bold().to_string());
 }
 
 fn render_speed_menu(config: &AppConfig, lines: &mut Vec<String>) {
     lines.push(style("╔══════════════════════════════════════════════════════════════╗").cyan().bold().to_string());
-    lines.push(style("║             ⚡  PENGATURAN KECEPATAN (SPEED: 1 - 10)          ║").bold().white().to_string());
+    lines.push(box_center(&style("⚡  PENGATURAN KECEPATAN (SPEED: 1 - 10)").bold().white().to_string()));
     lines.push(style("╠══════════════════════════════════════════════════════════════╣").cyan().to_string());
-    lines.push("║                                                              ║".to_string());
+    lines.push(box_empty());
 
     // Slider baris
     let mut slider_str = String::new();
@@ -248,12 +248,12 @@ fn render_speed_menu(config: &AppConfig, lines: &mut Vec<String>) {
             slider_str.push('─');
         }
     }
-    lines.push(format!("║   Kecepatan Aktif: {:>2} / 10                                 ║", style(config.speed).yellow().bold()));
-    lines.push("║                                                              ║".to_string());
-    lines.push(format!("║   Slider: {:<50} ║", slider_str));
-    lines.push("║                                                              ║".to_string());
+    lines.push(box_row(&format!("Kecepatan Aktif: {} / 10", style(config.speed).yellow().bold()), 3));
+    lines.push(box_empty());
+    lines.push(box_row(&format!("Slider: {slider_str}"), 3));
+    lines.push(box_empty());
     lines.push(style("╠══════════════════════════════════════════════════════════════╣").cyan().to_string());
-    lines.push("║  Penjelasan Kecepatan yang Dipilih:                          ║".to_string());
+    lines.push(box_row(&style("Penjelasan Kecepatan yang Dipilih:").bold().to_string(), 2));
 
     let (desc1, desc2) = match config.speed {
         1..=2 => (
@@ -266,38 +266,38 @@ fn render_speed_menu(config: &AppConfig, lines: &mut Vec<String>) {
         ),
         6..=7 => (
             "⚡ Speed 6 - 7: Seimbang (Optimal)",
-            "Keseimbangan ideal antara kecepatan dan penghematan ukuran.",
+            "Keseimbangan ideal antara kecepatan dan efisiensi ukuran.",
         ),
         _ => (
             "⚡ Speed 8 - 10: Sangat Cepat (Rekomendasi Default)",
-            "Encoding instan (~0.5s/foto) dengan kompresi hemat ~70-85%.",
+            "Encoding instan (~0.5s/foto), hemat ukuran ~70-85%.",
         ),
     };
 
-    lines.push(format!("║  {:<60}║", style(desc1).yellow().bold()));
-    lines.push(format!("║  {:<60}║", style(desc2).dim()));
+    lines.push(box_row(&style(desc1).yellow().bold().to_string(), 2));
+    lines.push(box_row(&style(desc2).dim().to_string(), 2));
     lines.push(style("╠══════════════════════════════════════════════════════════════╣").cyan().to_string());
-    lines.push("║  [←/→] Geser Slider  |  [Enter/Esc] Kembali & Simpan Otomatis║".to_string());
+    lines.push(box_center("[←/→] Geser Slider  |  [Enter/Esc] Simpan & Kembali"));
     lines.push(style("╚══════════════════════════════════════════════════════════════╝").cyan().bold().to_string());
 }
 
 fn render_quality_menu(config: &AppConfig, lines: &mut Vec<String>) {
     lines.push(style("╔══════════════════════════════════════════════════════════════╗").cyan().bold().to_string());
-    lines.push(style("║            🎯  PENGATURAN KUALITAS (QUALITY: 1 - 100)        ║").bold().white().to_string());
+    lines.push(box_center(&style("🎯  PENGATURAN KUALITAS (QUALITY: 1 - 100)").bold().white().to_string()));
     lines.push(style("╠══════════════════════════════════════════════════════════════╣").cyan().to_string());
-    lines.push("║                                                              ║".to_string());
+    lines.push(box_empty());
 
     let bar_len = 36;
     let filled = ((config.quality as usize) * bar_len) / 100;
     let empty = bar_len.saturating_sub(filled);
     let bar_visual = format!("{}{}", style("█".repeat(filled)).cyan(), style("░".repeat(empty)).dim());
 
-    lines.push(format!("║   Kualitas Aktif: {:>3} / 100                                ║", style(config.quality).yellow().bold()));
-    lines.push("║                                                              ║".to_string());
-    lines.push(format!("║   Bar: [{}] {:>3}%             ║", bar_visual, config.quality));
-    lines.push("║                                                              ║".to_string());
+    lines.push(box_row(&format!("Kualitas Aktif: {} / 100", style(config.quality).yellow().bold()), 3));
+    lines.push(box_empty());
+    lines.push(box_row(&format!("Bar: [{bar_visual}] {:>3}%", config.quality), 3));
+    lines.push(box_empty());
     lines.push(style("╠══════════════════════════════════════════════════════════════╣").cyan().to_string());
-    lines.push("║  Penjelasan Rentang Kualitas:                                ║".to_string());
+    lines.push(box_row(&style("Penjelasan Rentang Kualitas:").bold().to_string(), 2));
 
     let (desc1, desc2) = match config.quality {
         1..=20 => (
@@ -306,11 +306,11 @@ fn render_quality_menu(config: &AppConfig, lines: &mut Vec<String>) {
         ),
         21..=40 => (
             "🎯 Rentang 21 - 40 (Rendah / Hemat Ukuran)",
-            "Ukuran file hemat, cocok untuk thumbnail web / transmisi cepat.",
+            "Ukuran file hemat, cocok untuk web atau thumbnail.",
         ),
         41..=60 => (
             "🎯 Rentang 41 - 60 (Seimbang / Rekomendasi Default)",
-            "Keseimbangan emas antara efisiensi hemat dan ketajaman alami.",
+            "Keseimbangan emas antara efisiensi dan ketajaman foto.",
         ),
         61..=80 => (
             "🎯 Rentang 61 - 80 (Kualitas Tinggi)",
@@ -322,18 +322,18 @@ fn render_quality_menu(config: &AppConfig, lines: &mut Vec<String>) {
         ),
     };
 
-    lines.push(format!("║  {:<60}║", style(desc1).yellow().bold()));
-    lines.push(format!("║  {:<60}║", style(desc2).dim()));
+    lines.push(box_row(&style(desc1).yellow().bold().to_string(), 2));
+    lines.push(box_row(&style(desc2).dim().to_string(), 2));
     lines.push(style("╠══════════════════════════════════════════════════════════════╣").cyan().to_string());
-    lines.push("║  [↑/↓] Atur Step 1  |  [PgUp/PgDn] Step 10  |  [Esc] Kembali ║".to_string());
+    lines.push(box_center("[↑/↓] Step 1  |  [PgUp/PgDn] Step 10  |  [Esc] Kembali"));
     lines.push(style("╚══════════════════════════════════════════════════════════════╝").cyan().bold().to_string());
 }
 
 fn render_yuv_menu(config: &AppConfig, selected: usize, lines: &mut Vec<String>) {
     lines.push(style("╔══════════════════════════════════════════════════════════════╗").cyan().bold().to_string());
-    lines.push(style("║          📺  PENGATURAN FORMAT CHROMA (YUV FORMAT)           ║").bold().white().to_string());
+    lines.push(box_center(&style("📺  PENGATURAN FORMAT CHROMA (YUV FORMAT)").bold().white().to_string()));
     lines.push(style("╠══════════════════════════════════════════════════════════════╣").cyan().to_string());
-    lines.push("║                                                              ║".to_string());
+    lines.push(box_empty());
 
     let options = [
         ("420", "YUV 4:2:0  (Default & Paling Kompatibel)"),
@@ -350,27 +350,28 @@ fn render_yuv_menu(config: &AppConfig, selected: usize, lines: &mut Vec<String>)
             "         ".to_string()
         };
 
+        let row = format!("{:<43}{}", label, active_badge);
         if i == selected {
-            let row = format!("▶  {:<43}{}", label, active_badge);
-            lines.push(format!("║  {}  ║", style(row).green().bold().underlined()));
+            let item_str = format!("▶  {row}");
+            lines.push(box_row(&style(item_str).green().bold().underlined().to_string(), 2));
         } else {
-            let row = format!("   {:<43}{}", label, active_badge);
-            lines.push(format!("║  {}  ║", style(row).white()));
+            let item_str = format!("   {row}");
+            lines.push(box_row(&style(item_str).white().to_string(), 2));
         }
     }
 
-    lines.push("║                                                              ║".to_string());
+    lines.push(box_empty());
     lines.push(style("╠══════════════════════════════════════════════════════════════╣").cyan().to_string());
-    lines.push("║  Penjelasan Format Chroma yang Dipilih:                      ║".to_string());
+    lines.push(box_row(&style("Penjelasan Format Chroma yang Dipilih:").bold().to_string(), 2));
 
     let (desc1, desc2) = match selected {
         0 => (
             "📺 YUV 4:2:0 (Standar Industri & Rekomendasi)",
-            "Subsampling 2x2. Kompatibilitas universal & kompresi paling hemat.",
+            "Subsampling 2x2: kompatibel universal & kompresi hemat.",
         ),
         1 => (
             "📺 YUV 4:2:2 (Subsampling Horizontal)",
-            "Resolusi warna separuh horizontal. Bagus untuk tepi teks tajam.",
+            "Subsampling horizontal: separuh warna, tepi teks tajam.",
         ),
         2 => (
             "📺 YUV 4:4:4 (Penuh Tanpa Subsampling)",
@@ -382,9 +383,151 @@ fn render_yuv_menu(config: &AppConfig, selected: usize, lines: &mut Vec<String>)
         ),
     };
 
-    lines.push(format!("║  {:<60}║", style(desc1).yellow().bold()));
-    lines.push(format!("║  {:<60}║", style(desc2).dim()));
+    lines.push(box_row(&style(desc1).yellow().bold().to_string(), 2));
+    lines.push(box_row(&style(desc2).dim().to_string(), 2));
     lines.push(style("╠══════════════════════════════════════════════════════════════╣").cyan().to_string());
-    lines.push("║  [↑/↓] Pilih  |  [Enter] Terapkan  |  [Esc] Kembali & Simpan ║".to_string());
+    lines.push(box_center("[↑/↓] Pilih  |  [Enter] Terapkan  |  [Esc] Kembali"));
     lines.push(style("╚══════════════════════════════════════════════════════════════╝").cyan().bold().to_string());
+}
+
+pub const BOX_INTERIOR_WIDTH: usize = 62;
+
+pub fn box_row(content: &str, left_pad: usize) -> String {
+    let width = measure_text_width(content);
+    let max_allowed = BOX_INTERIOR_WIDTH.saturating_sub(left_pad);
+    if width > max_allowed {
+        let plain = console::strip_ansi_codes(content);
+        let truncated = if plain.len() > max_allowed {
+            format!("{}...", &plain[..max_allowed.saturating_sub(3)])
+        } else {
+            plain.to_string()
+        };
+        let t_width = measure_text_width(&truncated);
+        let right_pad = BOX_INTERIOR_WIDTH.saturating_sub(left_pad + t_width);
+        format!("║{}{truncated}{}║", " ".repeat(left_pad), " ".repeat(right_pad))
+    } else {
+        let right_pad = BOX_INTERIOR_WIDTH.saturating_sub(left_pad + width);
+        format!("║{}{content}{}║", " ".repeat(left_pad), " ".repeat(right_pad))
+    }
+}
+
+pub fn box_center(content: &str) -> String {
+    let width = measure_text_width(content);
+    if width > BOX_INTERIOR_WIDTH {
+        let plain = console::strip_ansi_codes(content);
+        let truncated = if plain.len() > BOX_INTERIOR_WIDTH {
+            format!("{}...", &plain[..BOX_INTERIOR_WIDTH.saturating_sub(3)])
+        } else {
+            plain.to_string()
+        };
+        let t_width = measure_text_width(&truncated);
+        let total_pad = BOX_INTERIOR_WIDTH.saturating_sub(t_width);
+        let left_pad = total_pad / 2;
+        let right_pad = total_pad - left_pad;
+        format!("║{}{truncated}{}║", " ".repeat(left_pad), " ".repeat(right_pad))
+    } else {
+        let total_pad = BOX_INTERIOR_WIDTH.saturating_sub(width);
+        let left_pad = total_pad / 2;
+        let right_pad = total_pad - left_pad;
+        format!("║{}{content}{}║", " ".repeat(left_pad), " ".repeat(right_pad))
+    }
+}
+
+pub fn box_empty() -> String {
+    format!("║{}║", " ".repeat(BOX_INTERIOR_WIDTH))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_box_row_width() {
+        let text1 = style("▶  1. Kecepatan Encoder (Speed)  : [  8 ]").green().bold().underlined().to_string();
+        let row1 = box_row(&text1, 2);
+        assert_eq!(measure_text_width(&row1), 64);
+
+        let text2 = "Subsampling 2x2: kompatibel universal & kompresi hemat.";
+        let row2 = box_row(text2, 2);
+        assert_eq!(measure_text_width(&row2), 64);
+
+        let text_long = "Ini adalah teks yang sangat panjang sekali melebihi kapasitas interior border sehingga harus dipotong aman";
+        let row_long = box_row(text_long, 2);
+        assert_eq!(measure_text_width(&row_long), 64);
+
+        let center = box_center(&style("⚙️  PENGATURAN GLOBAL GASINAVIF").bold().white().to_string());
+        assert_eq!(measure_text_width(&center), 64);
+
+        let empty = box_empty();
+        assert_eq!(measure_text_width(&empty), 64);
+    }
+
+    #[test]
+    fn test_all_screens_exact_64_width() {
+        let config = AppConfig::default();
+
+        let mut lines = Vec::new();
+        render_main_menu(&config, 0, &mut lines);
+        for (idx, line) in lines.iter().enumerate() {
+            assert_eq!(
+                measure_text_width(line),
+                64,
+                "Main menu line {idx} width is {} != 64: {line}",
+                measure_text_width(line)
+            );
+        }
+
+        let mut lines = Vec::new();
+        render_speed_menu(&config, &mut lines);
+        for (idx, line) in lines.iter().enumerate() {
+            assert_eq!(
+                measure_text_width(line),
+                64,
+                "Speed menu line {idx} width is {} != 64: {line}",
+                measure_text_width(line)
+            );
+        }
+
+        let mut lines = Vec::new();
+        render_quality_menu(&config, &mut lines);
+        for (idx, line) in lines.iter().enumerate() {
+            assert_eq!(
+                measure_text_width(line),
+                64,
+                "Quality menu line {idx} width is {} != 64: {line}",
+                measure_text_width(line)
+            );
+        }
+
+        let mut lines = Vec::new();
+        render_yuv_menu(&config, 0, &mut lines);
+        for (idx, line) in lines.iter().enumerate() {
+            assert_eq!(
+                measure_text_width(line),
+                64,
+                "YUV menu line {idx} width is {} != 64: {line}",
+                measure_text_width(line)
+            );
+        }
+
+        // Test Success Box Lines
+        let success_lines = [
+            style("╔══════════════════════════════════════════════════════════════╗").green().bold().to_string(),
+            box_center(&style("✅  PENGATURAN BERHASIL DISIMPAN").green().bold().to_string()),
+            style("╠══════════════════════════════════════════════════════════════╣").green().to_string(),
+            box_row(&format!("• Kecepatan (Speed)         : {}", style(format!("{} (1-10)", config.speed)).yellow().bold()), 2),
+            box_row(&format!("• Kualitas (Quality)        : {}", style(format!("{} / 100", config.quality)).cyan().bold()), 2),
+            box_row(&format!("• Format Chroma (YUV)       : {}", style(format!("YUV {}", config.yuv)).magenta().bold()), 2),
+            box_row(&format!("• File Konfigurasi          : {}", style("~/.config/gasinavif/config.json").dim()), 2),
+            style("╚══════════════════════════════════════════════════════════════╝").green().bold().to_string(),
+        ];
+        for (idx, line) in success_lines.iter().enumerate() {
+            assert_eq!(
+                measure_text_width(line),
+                64,
+                "Success box line {idx} width is {} != 64: {line}",
+                measure_text_width(line)
+            );
+        }
+    }
 }
