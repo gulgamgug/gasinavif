@@ -30,40 +30,49 @@ pub fn build_tag_payload(status: Option<&str>) -> String {
 ///
 /// Mengembalikan `true` jika file sudah pernah diproses atau ditandai batal.
 pub fn is_already_tagged(path: &Path) -> Result<bool> {
-    // 1. Coba baca via rexiv2 (mendukung JPG, AVIF, RAW, TIFF, PNG, dll)
+    // 1. Fast buffer scan: periksa apakah tag unik COMPRESSED_BY_SCRIPT ada di dalam file
+    if let Ok(mut file) = std::fs::File::open(path) {
+        use std::io::Read;
+        let tag_bytes = TAG_PREFIX.as_bytes();
+        let mut buffer = vec![0u8; 128 * 1024]; // 128 KB buffer
+        
+        // Cek 128 KB pertama (biasanya metadata EXIF di awal file)
+        if let Ok(n) = file.read(&mut buffer) {
+            if buffer[..n].windows(tag_bytes.len()).any(|w| w == tag_bytes) {
+                return Ok(true);
+            }
+        }
+
+        // Untuk container seperti AVIF/BMFF, metadata bisa berada di mdat box.
+        // Jika file berukuran < 30 MB, scan cepat seluruh file.
+        if let Ok(meta) = path.metadata() {
+            if meta.len() < 30 * 1024 * 1024 {
+                if let Ok(all_bytes) = std::fs::read(path) {
+                    if all_bytes.windows(tag_bytes.len()).any(|w| w == tag_bytes) {
+                        return Ok(true);
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Coba baca via rexiv2 (mendukung JPG, RAW, TIFF, PNG, dll)
     if let Ok(meta) = rexiv2::Metadata::new_from_path(path) {
-        // Cek Exif UserComment
         if let Ok(comment) = meta.get_tag_string("Exif.Photo.UserComment") {
             if comment.contains(TAG_PREFIX) {
                 return Ok(true);
             }
         }
 
-        // Cek Exif ImageDescription (beberapa kamera/tool menyimpan komentar di sini)
         if let Ok(desc) = meta.get_tag_string("Exif.Image.ImageDescription") {
             if desc.contains(TAG_PREFIX) {
                 return Ok(true);
             }
         }
 
-        // Cek Xmp CreatorTool atau Xmp Description
         if let Ok(tool) = meta.get_tag_string("Xmp.xmp.CreatorTool") {
             if tool.contains("gasinavif") || tool.contains("fish-avif-compressor") {
                 return Ok(true);
-            }
-        }
-    }
-
-    // 2. Fallback via kamadak-exif untuk file container standard
-    if let Ok(file) = std::fs::File::open(path) {
-        let mut buf_reader = std::io::BufReader::new(&file);
-        let exif_reader = exif::Reader::new();
-        if let Ok(exif) = exif_reader.read_from_container(&mut buf_reader) {
-            if let Some(field) = exif.get_field(exif::Tag::UserComment, exif::In::PRIMARY) {
-                let value = field.display_value().to_string();
-                if value.contains(TAG_PREFIX) {
-                    return Ok(true);
-                }
             }
         }
     }
@@ -132,13 +141,19 @@ pub fn copy_and_tag_metadata(src: &Path, dst: &Path, status: Option<&str>) -> Re
     Ok(())
 }
 
-/// Mengambil raw EXIF bytes dari file (berguna jika ingin di-embed langsung ke AVIF encoder).
+/// Mengambil raw EXIF bytes (berupa TIFF header) dari file gambar.
 pub fn extract_raw_exif_bytes(path: &Path) -> Option<Vec<u8>> {
-    // Gunakan img-parts (sangat cepat untuk JPG)
     if let Ok(bytes) = std::fs::read(path) {
         if let Ok(Some(dyn_img)) = img_parts::DynImage::from_bytes(bytes.into()) {
             if let Some(exif_bytes) = dyn_img.exif() {
-                return Some(exif_bytes.to_vec());
+                let mut data = exif_bytes.as_ref();
+                // Jika diawali "Exif\0\0", potong 6 byte header JPEG APP1
+                if data.starts_with(b"Exif\0\0") {
+                    data = &data[6..];
+                }
+                if data.starts_with(b"II\x2a\0") || data.starts_with(b"MM\0\x2a") {
+                    return Some(data.to_vec());
+                }
             }
         }
     }
