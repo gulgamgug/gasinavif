@@ -107,7 +107,7 @@ pub fn print_summary(
     println!();
     println!("{border_color}");
     println!(
-        "║{:^50}║",
+        "║          {}          ║",
         style("📊 LAPORAN RINGKASAN GASINAVIF").bold().white()
     );
     println!("{divider_color}");
@@ -142,8 +142,8 @@ pub fn print_summary(
         style(format_duration(duration)).yellow()
     );
     println!(
-        "║  Kecepatan rata-rata: {:>21.1} file/s  ║",
-        throughput
+        "║  Kecepatan rata-rata: {:>25}  ║",
+        style(format!("{:.1} file/s", throughput)).white().bold()
     );
     println!("{bottom_color}");
     println!();

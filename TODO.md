@@ -174,3 +174,22 @@
   - `l` (List/Folder Tree): Tampilan struktur direktori pohon (*tree hierarchy*) dengan karakter `├── `, `└── `, indikator progres `x/y` per folder, serta animasi spinner / centang hijau (`✔`) saat folder tuntas.
 - [x] **Distribusi & Rilis**:
   - Kompilasi ulang release binary dengan fitur interaktif baru dan instalasi ke `~/.local/bin/gasinavif`.
+
+---
+
+### Sprint 10: Performa AVIF SIMD, Bug Fixing Terminal & Perapihan UI ✅
+- [x] **Akselerasi Encoding AVIF (SIMD Fast Path)**:
+  - Integrasi langsung ke `avifenc` berbasis `libaom` + `libjpeg-turbo` dengan akselerasi instruksi AVX2/AVX-512.
+  - Peningkatan performa drastis dari 6.4 detik/foto menjadi 0.5 detik/foto (12x lebih kencang).
+  - Mekanisme *auto-fallback* ke `ravif` jika `avifenc` gagal atau tidak ditemukan agar tidak ada file yang gagal diproses.
+- [x] **Perbaikan Output Terminal & Eliminasi Tangga Diagonal (*Staircase Bug*)**:
+  - Penataan mode terminal: mode raw hanya diaktifkan saat worker pemrosesan aktif, membiarkan tahap scan awal tetap dalam mode *cooked* normal.
+  - Setiap baris keluaran pada mode raw dipastikan diawali `\r` (kolom 0) dan diakhiri `\x1B[K\r\n` agar kursor tidak bergeser miring.
+  - Penyesuaian lebar dinamis progress bar dan status line berdasarkan ukuran terminal untuk mencegah *line wrapping* liar.
+- [x] **Peredaman Warning Eksternal (*Noise Reduction*)**:
+  - Konfigurasi `rexiv2::set_log_level(rexiv2::LogLevel::MUTE)` agar warning GLib/Exiv2 tidak bocor mengotori terminal.
+- [x] **Perapihan Tabel Kotak Ringkasan (*Box Alignment Bug*)**:
+  - Koreksi lebar kolom tabel `HASIL PEMINDAIAN` (tepat 42 kolom visual).
+  - Koreksi judul dan baris `Kecepatan rata-rata` pada `LAPORAN RINGKASAN GASINAVIF` (tepat 50 kolom visual tanpa ada border kanan `║` yang mencuat keluar).
+- [x] **Kompilasi & Instalasi Rilis**:
+  - Kompilasi `cargo build --release` dan pemasangan ulang ke `~/.local/bin/gasinavif`.
