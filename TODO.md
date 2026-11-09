@@ -13,6 +13,13 @@
 - [x] **Fase 6: State Management, Resume, & Signal Handling (`Ctrl+C`)** ✅
 - [x] **Fase 7: Tampilan Progress Bar & Laporan Akhir (`indicatif`)** ✅
 - [x] **Fase 8: Pengujian, Benchmarking, & Distribusi Binary** ✅
+- [ ] **Sprint 9: Kontrol Interaktif & Monitoring Real-Time (Live TUI)** 🚀
+  - [ ] Estimasi waktu tersisa (ETA) & indikator kecepatan (*n* foto/detik) real-time.
+  - [ ] Hotkey `s` (Show Workers): Menampilkan file yang sedang diproses per core/thread secara dinamis.
+  - [ ] Hotkey `v` (Toggle Verbose): Toggle mode verbose secara on-the-fly saat program berjalan.
+  - [ ] Hotkey `t` (Adjust Threads): Mengatur jumlah thread pekerja secara dinamis saat kompresi berjalan.
+  - [ ] Hotkey `l` (Folder Tree Progress): Tampilan hierarki folder ala `tree` dengan progres counter dan spinner/checkmark per folder.
+  - [ ] Non-blocking terminal event loop via `crossterm` dan proteksi raw mode.
 
 ---
 
@@ -152,3 +159,18 @@
 - [x] Kompilasi binary rilis teroptimasi: `cargo build --release` (LTO, strip symbols, opt-level 3, binary size ~6.2 MB).
 - [x] Instalasi binary ke `~/.local/bin/gasinavif`.
 - [x] Benchmark throughput: ~13.8 file/detik dengan penghematan ukuran > 85%.
+
+---
+
+### Sprint 9: Kontrol Interaktif & Monitoring Real-Time (Live TUI)
+- [ ] **Indikator Kecepatan & Estimasi ETA**:
+  - Kecepatan pemrosesan dinamis (*rolling average* foto/detik).
+  - Estimasi waktu tersisa (ETA) format `hh:mm:ss` / `mm:ss` yang diperbarui secara langsung.
+- [ ] **Live Interactive Keyboard Controls (Non-blocking)**:
+  - Mode raw terminal via `crossterm` dengan pengembalian mode otomatis (*RAII guard*).
+  - `s` (Show Workers): Toggle tampilan baris per worker thread/core dan nama file yang sedang aktif dikompresi.
+  - `v` (Verbose): Toggle pesan log detail secara *on-the-fly* tanpa perlu restart program.
+  - `t` (Threads): Pengaturan jumlah worker paralel dinamis saat kompresi sedang berjalan.
+  - `l` (List/Folder Tree): Tampilan struktur direktori pohon (*tree hierarchy*) dengan karakter `├── `, `└── `, indikator progres `x/y` per folder, serta animasi spinner / centang hijau (`✔`) saat folder tuntas.
+- [ ] **Distribusi & Rilis**:
+  - Kompilasi ulang release binary dengan fitur interaktif baru dan instalasi ke `~/.local/bin/gasinavif`.
