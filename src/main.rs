@@ -226,7 +226,7 @@ fn main() -> Result<()> {
             );
             for raw_path in &raw_to_delete {
                 if args.verbose {
-                    println!("  [HAPUS-RAW] {}", raw_path.display());
+                    println!("{}", ui::badge_deleted_raw(raw_path));
                 }
                 std::fs::remove_file(raw_path).with_context(|| {
                     format!("Gagal menghapus RAW: {}", raw_path.display())
@@ -278,12 +278,7 @@ fn main() -> Result<()> {
                     }
 
                     if args.verbose {
-                        pb.println(format!(
-                            "  {} {} (hemat {})",
-                            style("[OK-RAW]").cyan().bold(),
-                            raw_path.display(),
-                            ui::format_size(saved)
-                        ));
+                        pb.println(ui::badge_ok_raw(raw_path, saved));
                     }
 
                     let mut state = app_state.lock().unwrap();
@@ -292,11 +287,7 @@ fn main() -> Result<()> {
                 Ok(processor::ProcessResult::SkippedAlreadyTagged) => {
                     skipped_count.fetch_add(1, Ordering::Relaxed);
                     if args.verbose {
-                        pb.println(format!(
-                            "  {} {}",
-                            style("[SKIP-TAG]").dim(),
-                            raw_path.display()
-                        ));
+                        pb.println(ui::badge_skipped_tagged(raw_path));
                     }
                     let mut state = app_state.lock().unwrap();
                     state.mark_skipped(raw_path.clone());
@@ -304,30 +295,16 @@ fn main() -> Result<()> {
                 Ok(processor::ProcessResult::SkippedLarger) => {
                     skipped_count.fetch_add(1, Ordering::Relaxed);
                     if args.verbose {
-                        pb.println(format!(
-                            "  {} {} (JPG >= RAW, RAW dipertahankan)",
-                            style("[BATAL]").yellow().bold(),
-                            raw_path.display()
-                        ));
+                        pb.println(ui::badge_skipped_larger(raw_path, "JPG >= RAW, RAW dipertahankan"));
                     }
                     let mut state = app_state.lock().unwrap();
                     state.mark_skipped(raw_path.clone());
                 }
                 Ok(processor::ProcessResult::Failed(err)) => {
-                    pb.println(format!(
-                        "  {} {}: {}",
-                        style("[GAGAL]").red().bold(),
-                        raw_path.display(),
-                        err
-                    ));
+                    pb.println(ui::badge_error(raw_path, &err));
                 }
                 Err(err) => {
-                    pb.println(format!(
-                        "  {} {}: {}",
-                        style("[ERROR]").red().bold(),
-                        raw_path.display(),
-                        err
-                    ));
+                    pb.println(ui::badge_error(raw_path, &err.to_string()));
                 }
             }
         });
@@ -363,12 +340,7 @@ fn main() -> Result<()> {
                 Ok(processor::ProcessResult::Success { saved }) => {
                     stage2_processed.fetch_add(1, Ordering::Relaxed);
                     if args.verbose {
-                        pb.println(format!(
-                            "  {} {} (hemat {})",
-                            style("[OK-AVIF]").green().bold(),
-                            jpg_path.display(),
-                            ui::format_size(saved)
-                        ));
+                        pb.println(ui::badge_ok_avif(jpg_path, saved));
                     }
 
                     let mut state = app_state.lock().unwrap();
@@ -377,11 +349,7 @@ fn main() -> Result<()> {
                 Ok(processor::ProcessResult::SkippedAlreadyTagged) => {
                     skipped_count.fetch_add(1, Ordering::Relaxed);
                     if args.verbose {
-                        pb.println(format!(
-                            "  {} {}",
-                            style("[SKIP-TAG]").dim(),
-                            jpg_path.display()
-                        ));
+                        pb.println(ui::badge_skipped_tagged(jpg_path));
                     }
                     let mut state = app_state.lock().unwrap();
                     state.mark_skipped(jpg_path.clone());
@@ -389,30 +357,16 @@ fn main() -> Result<()> {
                 Ok(processor::ProcessResult::SkippedLarger) => {
                     skipped_count.fetch_add(1, Ordering::Relaxed);
                     if args.verbose {
-                        pb.println(format!(
-                            "  {} {} (AVIF >= JPG, JPG dipertahankan)",
-                            style("[BATAL]").yellow().bold(),
-                            jpg_path.display()
-                        ));
+                        pb.println(ui::badge_skipped_larger(jpg_path, "AVIF >= JPG, JPG dipertahankan"));
                     }
                     let mut state = app_state.lock().unwrap();
                     state.mark_skipped(jpg_path.clone());
                 }
                 Ok(processor::ProcessResult::Failed(err)) => {
-                    pb.println(format!(
-                        "  {} {}: {}",
-                        style("[GAGAL]").red().bold(),
-                        jpg_path.display(),
-                        err
-                    ));
+                    pb.println(ui::badge_error(jpg_path, &err));
                 }
                 Err(err) => {
-                    pb.println(format!(
-                        "  {} {}: {}",
-                        style("[ERROR]").red().bold(),
-                        jpg_path.display(),
-                        err
-                    ));
+                    pb.println(ui::badge_error(jpg_path, &err.to_string()));
                 }
             }
         });
