@@ -3,4 +3,7 @@
 .vscode/
 .gasinavif_state/
 *.tmp
+*.pdf
+*chat*
+*gemini*
 
