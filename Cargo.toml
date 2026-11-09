@@ -1,0 +1,83 @@
+[package]
+name = "gasinavif"
+version = "0.1.0"
+edition = "2024"
+description = "High-performance CLI tool for camera photo compression (RAW → JPG → AVIF)"
+authors = ["Raihan Lazuardi"]
+
+# ─── CLI & Argument Parsing ───
+[dependencies.clap]
+version = "4"
+features = ["derive"]
+
+# ─── Parallelism ───
+[dependencies.rayon]
+version = "1"
+
+# ─── Terminal UI & Progress Bars ───
+[dependencies.indicatif]
+version = "0.17"
+features = ["rayon"]
+
+[dependencies.console]
+version = "0.15"
+
+# ─── Directory Traversal ───
+[dependencies.walkdir]
+version = "2"
+
+# ─── Image Processing (decode/encode raster) ───
+[dependencies.image]
+version = "0.25"
+
+# ─── AVIF Encoding (pure Rust via rav1e) ───
+[dependencies.ravif]
+version = "0.13"
+
+[dependencies.rgb]
+version = "0.8"
+
+# ─── RAW Decoding (pure Rust) ───
+[dependencies.rawloader]
+version = "0.37"
+
+# ─── EXIF Metadata ───
+[dependencies.kamadak-exif]
+version = "0.6"
+
+[dependencies.img-parts]
+version = "0.4"
+
+# ─── Serialization (State / Resume) ───
+[dependencies.serde]
+version = "1"
+features = ["derive"]
+
+[dependencies.serde_json]
+version = "1"
+
+# ─── Signal Handling ───
+[dependencies.ctrlc]
+version = "3"
+features = ["termination"]
+
+# ─── File Timestamps ───
+[dependencies.filetime]
+version = "0.2"
+
+# ─── Error Handling ───
+[dependencies.anyhow]
+version = "1"
+
+# ─── Hostname ───
+[dependencies.hostname]
+version = "0.4"
+
+# ─── Datetime ───
+[dependencies.chrono]
+version = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true
