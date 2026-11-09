@@ -20,10 +20,24 @@ pub enum ProcessResult {
     Failed(String),
 }
 
+/// Cek apakah executable `avifenc` tersedia di sistem
+pub fn is_avifenc_available() -> bool {
+    static AVAILABLE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *AVAILABLE.get_or_init(|| {
+        std::process::Command::new("avifenc")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    })
+}
+
 /// Tahap 2: Konversi satu file JPG menjadi AVIF.
 ///
-/// Menggunakan `ravif` untuk encoding AV1 multi-threaded murni di memori,
-/// menyalin metadata EXIF, dan memastikan ukuran AVIF < JPG asli.
+/// Memprioritaskan `avifenc` (SIMD libaom + libjpeg-turbo) untuk kecepatan maksimal,
+/// dengan fallback ke `ravif` jika `avifenc` tidak terpasang.
 pub fn process_jpg_to_avif(
     jpg_path: &Path,
     quality: u8,
@@ -41,51 +55,74 @@ pub fn process_jpg_to_avif(
         .with_context(|| format!("Gagal membaca metadata JPG: {}", jpg_path.display()))?
         .len();
 
-    // 2. Decode JPG ke image buffer
-    let dyn_img = image::open(jpg_path)
-        .with_context(|| format!("Gagal decode JPEG: {}", jpg_path.display()))?;
-    let rgba = dyn_img.to_rgba8();
-    let (width, height) = rgba.dimensions();
-
-    let pixels: Vec<ravif::RGBA8> = rgba
-        .chunks_exact(4)
-        .map(|c| ravif::RGBA8::new(c[0], c[1], c[2], c[3]))
-        .collect();
-
-    let img_view = ravif::Img::new(&pixels[..], width as usize, height as usize);
-
-    // 3. Setup ravif encoder
-    let mut encoder = ravif::Encoder::new()
-        .with_quality(quality as f32)
-        .with_speed(speed);
-
-    // Sisipkan raw EXIF jika tersedia
-    let exif_data = metadata::extract_raw_exif_bytes(jpg_path);
-    if let Some(ref exif) = exif_data {
-        encoder = encoder.with_exif(exif.as_slice());
-    }
-
-    // 4. Encode ke AVIF
-    let encoded = encoder
-        .encode_rgba(img_view)
-        .with_context(|| format!("Gagal encode AVIF: {}", jpg_path.display()))?;
-
-    // 5. Tulis ke file temporary: *.avif.tmp
     let dir = jpg_path.parent().unwrap_or_else(|| Path::new("."));
     let stem = jpg_path.file_stem().and_then(|s| s.to_str()).unwrap_or("image");
     let tmp_avif = dir.join(format!("{stem}.avif.tmp"));
     let final_avif = dir.join(format!("{stem}.avif"));
 
-    std::fs::write(&tmp_avif, &encoded.avif_file)
-        .with_context(|| format!("Gagal menulis temporary AVIF: {}", tmp_avif.display()))?;
+    if is_avifenc_available() {
+        // Fast path: SIMD libaom via avifenc (10-15x lebih cepat daripada pure-Rust ravif)
+        let status = std::process::Command::new("avifenc")
+            .arg(jpg_path)
+            .arg(&tmp_avif)
+            .arg("-q")
+            .arg(quality.to_string())
+            .arg("--speed")
+            .arg(speed.to_string())
+            .arg("--yuv")
+            .arg("420")
+            .arg("-j")
+            .arg("1") // 1 worker thread per file karena dynamic pool kita sudah multi-threaded
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+
+        match status {
+            Ok(s) if s.success() && tmp_avif.exists() => {
+                // Berhasil encode dengan avifenc
+            }
+            _ => {
+                let _ = std::fs::remove_file(&tmp_avif);
+                return Ok(ProcessResult::Failed("avifenc gagal memproses file".to_string()));
+            }
+        }
+    } else {
+        // Fallback: ravif pure-Rust encoder di memori
+        let dyn_img = image::open(jpg_path)
+            .with_context(|| format!("Gagal decode JPEG: {}", jpg_path.display()))?;
+        let rgba = dyn_img.to_rgba8();
+        let (width, height) = rgba.dimensions();
+
+        let pixels: Vec<ravif::RGBA8> = rgba
+            .chunks_exact(4)
+            .map(|c| ravif::RGBA8::new(c[0], c[1], c[2], c[3]))
+            .collect();
+
+        let img_view = ravif::Img::new(&pixels[..], width as usize, height as usize);
+
+        let mut encoder = ravif::Encoder::new()
+            .with_quality(quality as f32)
+            .with_speed(speed);
+
+        let exif_data = metadata::extract_raw_exif_bytes(jpg_path);
+        if let Some(ref exif) = exif_data {
+            encoder = encoder.with_exif(exif.as_slice());
+        }
+
+        let encoded = encoder
+            .encode_rgba(img_view)
+            .with_context(|| format!("Gagal encode AVIF: {}", jpg_path.display()))?;
+
+        std::fs::write(&tmp_avif, &encoded.avif_file)
+            .with_context(|| format!("Gagal menulis temporary AVIF: {}", tmp_avif.display()))?;
+    }
 
     let new_size = std::fs::metadata(&tmp_avif)
         .with_context(|| format!("Gagal membaca metadata tmp AVIF: {}", tmp_avif.display()))?
         .len();
 
-    // 6. Validasi perbandingan ukuran
+    // Validasi perbandingan ukuran
     if new_size < orig_size {
-        // Berhasil hemat ukuran!
         let _ = metadata::preserve_mtime(jpg_path, &tmp_avif);
 
         std::fs::remove_file(jpg_path)
@@ -97,12 +134,8 @@ pub fn process_jpg_to_avif(
         let saved = orig_size - new_size;
         Ok(ProcessResult::Success { saved })
     } else {
-        // Gagal menghemat ukuran (AVIF >= JPG asli)
         let _ = std::fs::remove_file(&tmp_avif);
-
-        // Beri tag STATUS=SKIPPED_LARGER ke JPG asli agar tidak diproses ulang di masa depan
         let _ = metadata::tag_file(jpg_path, Some(metadata::STATUS_SKIPPED_LARGER), true);
-
         Ok(ProcessResult::SkippedLarger)
     }
 }

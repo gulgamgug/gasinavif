@@ -173,8 +173,10 @@ impl LiveController {
         (speed, eta_formatted)
     }
 
-    /// Merender status baris worker (mode 's')
+    /// Merender status baris worker (mode 's') dengan proteksi pembatasan lebar kolom agar tidak pernah wrap
     pub fn render_worker_lines(&self) -> Vec<String> {
+        let (cols, _) = crossterm::terminal::size().unwrap_or((80, 24));
+        let max_path = (cols as usize).saturating_sub(18).max(15);
         let slots = self.worker_slots.read().unwrap();
         let limit = self.target_threads.load(Ordering::Relaxed);
         let mut lines = Vec::new();
@@ -183,7 +185,13 @@ impl LiveController {
             let label = style(format!("[Core {:>2}]", i)).cyan().bold();
             match slots.get(i).and_then(|s| s.as_ref()) {
                 Some(path) => {
-                    lines.push(format!("    {} {}", label, path.display()));
+                    let path_str = path.to_string_lossy();
+                    let display_path = if path_str.len() > max_path {
+                        format!("...{}", &path_str[path_str.len() - max_path + 3..])
+                    } else {
+                        path_str.to_string()
+                    };
+                    lines.push(format!("    {} {}", label, display_path));
                 }
                 None => {
                     lines.push(format!("    {} {}", label, style("(idle)").dim()));
@@ -194,8 +202,9 @@ impl LiveController {
         lines
     }
 
-    /// Baris navigasi panduan shortcut interaktif
+    /// Baris navigasi panduan shortcut interaktif yang responsif terhadap ukuran terminal
     pub fn render_control_hint(&self) -> String {
+        let (cols, _) = crossterm::terminal::size().unwrap_or((80, 24));
         let s_on = self.show_workers.load(Ordering::Relaxed);
         let v_on = self.is_verbose.load(Ordering::Relaxed);
         let l_on = self.show_tree.load(Ordering::Relaxed);
@@ -207,11 +216,21 @@ impl LiveController {
         let t_label = style(format!("t:threads ({threads})")).yellow().bold();
         let q_label = style("q:quit").red().bold();
 
-        format!("    [ {} | {} | {} | {} | {} ]", s_label, l_label, v_label, t_label, q_label)
+        if (cols as usize) < 75 {
+            format!("  [ {} | {} | {} | t:{} | {} ]",
+                if s_on { style("s:ON").green() } else { style("s:OFF").dim() },
+                if l_on { style("l:ON").green() } else { style("l:OFF").dim() },
+                if v_on { style("v:ON").green() } else { style("v:OFF").dim() },
+                threads,
+                style("q").red()
+            )
+        } else {
+            format!("  [ {} | {} | {} | {} | {} ]", s_label, l_label, v_label, t_label, q_label)
+        }
     }
 }
 
-/// Merender satu baris progress bar dengan styling modern
+/// Merender satu baris progress bar dengan lebar adaptif agar tidak pernah overflow / wrap
 fn render_bar_line(
     stage_label: &str,
     spinner_char: char,
@@ -221,6 +240,8 @@ fn render_bar_line(
     speed: f64,
     eta: &str,
 ) -> String {
+    let (cols, _) = crossterm::terminal::size().unwrap_or((80, 24));
+    let cols = cols as usize;
     let elapsed_str = ui::format_duration(elapsed);
     let pct = if total > 0 {
         (processed as f64 / total as f64) * 100.0
@@ -228,7 +249,9 @@ fn render_bar_line(
         100.0
     };
 
-    let bar_width = 30;
+    // Alokasikan sisa kolom untuk progress bar tanpa menyebabkan line wrapping
+    let reserved = 56;
+    let bar_width = cols.saturating_sub(reserved).clamp(8, 25);
     let filled = if total > 0 {
         ((processed as f64 / total as f64) * bar_width as f64).round() as usize
     } else {
@@ -327,7 +350,7 @@ pub fn execute_with_dynamic_workers<F>(
                         p_counter.fetch_add(1, Ordering::Relaxed);
                     }
                     None => {
-                        std::thread::sleep(Duration::from_millis(20));
+                        std::thread::sleep(Duration::from_millis(15));
                     }
                 }
             }
@@ -354,14 +377,14 @@ pub fn execute_with_dynamic_workers<F>(
         };
 
         if is_tty {
-            // Bersihkan frame sebelumnya jika ada
+            // Bersihkan frame sebelumnya dari kolom 0
             if prev_lines > 0 {
-                print!("\x1B[{}A\x1B[0J", prev_lines);
+                print!("\r\x1B[{}A\r\x1B[J", prev_lines);
             }
 
-            // Cetak log verbose yang masuk
+            // Cetak log verbose yang masuk dengan carriage return \r dan \r\n
             for msg in pending_logs {
-                println!("{}", msg);
+                print!("\r{}\x1B[K\r\n", msg);
             }
 
             // Bangun baris-baris frame aktif
@@ -399,7 +422,7 @@ pub fn execute_with_dynamic_workers<F>(
             // Baris petunjuk tombol interaktif
             active_lines.push(controller.render_control_hint());
 
-            // Batasi baris agar tidak overflow dari terminal
+            // Batasi baris agar tidak overflow dari batas tinggi layar terminal
             let (_cols, rows) = crossterm::terminal::size().unwrap_or((80, 24));
             let max_lines = (rows.saturating_sub(2) as usize).max(3);
             if active_lines.len() > max_lines {
@@ -410,7 +433,8 @@ pub fn execute_with_dynamic_workers<F>(
 
             prev_lines = active_lines.len();
             for line in &active_lines {
-                println!("{}", line);
+                // Selalu cetak dengan \r di awal, \x1B[K untuk bersihkan sisa baris, dan \r\n di akhir
+                print!("\r{}\x1B[K\r\n", line);
             }
             let _ = std::io::stdout().flush();
         } else {
@@ -440,7 +464,7 @@ pub fn execute_with_dynamic_workers<F>(
     }
 
     if is_tty && prev_lines > 0 {
-        print!("\x1B[{}A\x1B[0J", prev_lines);
+        print!("\r\x1B[{}A\r\x1B[J", prev_lines);
         let _ = std::io::stdout().flush();
     }
 
@@ -450,19 +474,33 @@ pub fn execute_with_dynamic_workers<F>(
         q.drain(..).collect()
     };
     for msg in remaining_logs {
-        println!("{}", msg);
+        if is_tty {
+            print!("\r{}\x1B[K\r\n", msg);
+        } else {
+            println!("{}", msg);
+        }
     }
 
     let final_processed = processed_counter.load(Ordering::Relaxed);
     let elapsed = ui::format_duration(start_time.elapsed());
-    println!(
-        "  {} {} [{}] {} file selesai.",
-        style("✔").green().bold(),
-        style(stage_label).bold(),
-        elapsed,
-        style(final_processed).green().bold(),
-    );
-    println!();
+    if is_tty {
+        print!(
+            "\r  {} {} [{}] {} file selesai.\x1B[K\r\n\r\n",
+            style("✔").green().bold(),
+            style(stage_label).bold(),
+            elapsed,
+            style(final_processed).green().bold(),
+        );
+        let _ = std::io::stdout().flush();
+    } else {
+        println!(
+            "  {} {} [{}] {} file selesai.\n",
+            style("✔").green().bold(),
+            style(stage_label).bold(),
+            elapsed,
+            style(final_processed).green().bold(),
+        );
+    }
 }
 
 #[cfg(test)]
@@ -490,7 +528,7 @@ mod tests {
         assert!(lines[0].contains("(idle)"));
 
         let hint = ctrl.render_control_hint();
-        assert!(hint.contains("threads (4)"));
+        assert!(hint.contains("threads (4)") || hint.contains("t:4"));
     }
 
     #[test]
