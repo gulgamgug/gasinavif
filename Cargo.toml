@@ -5,6 +5,9 @@ edition = "2024"
 description = "High-performance CLI tool for camera photo compression (RAW → JPG → AVIF)"
 authors = ["Raihan Lazuardi"]
 
+[dependencies]
+rexiv2 = "0.10.0"
+
 # ─── CLI & Argument Parsing ───
 [dependencies.clap]
 version = "4"
