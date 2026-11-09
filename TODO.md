@@ -8,7 +8,7 @@
 - [x] **Fase 1: Inisialisasi Proyek & Setup Environment** ✅
 - [x] **Fase 2: Antarmuka CLI & Parsing Argumen (`clap`)** ✅
 - [x] **Fase 3: File Scanner & Logika Pairing Cerdas (RAW + JPG)** ✅
-- [ ] **Fase 4: Manajemen Metadata & EXIF In-Process**
+- [x] **Fase 4: Manajemen Metadata & EXIF In-Process** ✅
 - [ ] **Fase 5: Core Processing Engine (Tahap 1 & Tahap 2)**
 - [ ] **Fase 6: State Management, Resume, & Signal Handling (`Ctrl+C`)**
 - [ ] **Fase 7: Tampilan Progress Bar & Laporan Akhir (`indicatif`)**
@@ -76,15 +76,16 @@
 
 ---
 
-### Fase 4: Manajemen Metadata & EXIF In-Process
-- [ ] Format spesifikasi payload metadata:
+### Fase 4: Manajemen Metadata & EXIF In-Process ✅
+- [x] Format spesifikasi payload metadata:
   `COMPRESSED_BY_SCRIPT=true;DATE=<ISO_8601>;HOST=<HOSTNAME>`
-- [ ] Format tag penanda batal:
+- [x] Format tag penanda batal:
   `COMPRESSED_BY_SCRIPT=true;DATE=<ISO_8601>;HOST=<HOSTNAME>;STATUS=SKIPPED_LARGER`
-- [ ] Fungsi baca cepat tag metadata `UserComment` secara *in-process* (tanpa memanggil `exiftool`).
-- [ ] Fungsi duplikasi seluruh metadata EXIF dari file sumber ke file tujuan.
-- [ ] Fungsi injeksi tag metadata ke dalam container gambar JPG dan AVIF.
-- [ ] Fungsi preservasi timestamp file (*mtime*) agar tanggal foto tetap asli.
+- [x] Fungsi baca cepat tag metadata `UserComment` & `Xmp.xmp.CreatorTool` secara *in-process* via `rexiv2` (tanpa spawn `exiftool`).
+- [x] Fungsi duplikasi dan penyalinan seluruh metadata EXIF dari file sumber ke file tujuan.
+- [x] Fungsi injeksi tag metadata ke dalam file gambar.
+- [x] Fungsi preservasi timestamp file (*mtime*) agar tanggal foto tetap asli.
+- [x] Unit tests untuk validasi payload dan read/write tag JPEG in-memory.
 
 ---
 
