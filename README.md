@@ -109,6 +109,18 @@ Options:
   -V, --version            Tampilkan versi
 ```
 
+### 🎮 Kontrol Interaktif Saat Program Berjalan (Live Hotkeys)
+
+Saat proses kompresi sedang berjalan di terminal, Anda dapat menekan tombol pintas (*hotkey*) berikut secara langsung:
+
+| Tombol | Aksi | Deskripsi |
+| :---: | :--- | :--- |
+| **`s`** | **Show Active Workers** | Toggle tampilan nama file yang sedang aktif diproses per core/thread. |
+| **`v`** | **Toggle Verbose** | Mengaktifkan/menonaktifkan log detail per file secara *on-the-fly*. |
+| **`t`** | **Adjust Threads** | Mengatur jumlah worker thread secara dinamis saat proses berjalan. |
+| **`l`** | **Folder Tree Progress** | Toggle tampilan struktur pohon folder beserta progres file dan animasi status per folder. |
+| **`q`** | **Quit / Graceful Stop** | Menghentikan proses dengan aman, membersihkan file `.tmp`, dan menyimpan state. |
+
 ### Contoh Skenario
 
 #### Foto liburan dengan kamera DSLR (dual-format RAW+JPG)

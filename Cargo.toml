@@ -6,6 +6,7 @@ description = "High-performance CLI tool for camera photo compression (RAW → J
 authors = ["Raihan Lazuardi"]
 
 [dependencies]
+crossterm = "0.29.0"
 rexiv2 = "0.10.0"
 
 # ─── CLI & Argument Parsing ───
