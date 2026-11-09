@@ -10,7 +10,7 @@
 - [x] **Fase 3: File Scanner & Logika Pairing Cerdas (RAW + JPG)** ✅
 - [x] **Fase 4: Manajemen Metadata & EXIF In-Process** ✅
 - [x] **Fase 5: Core Processing Engine (Tahap 1 & Tahap 2)** ✅
-- [ ] **Fase 6: State Management, Resume, & Signal Handling (`Ctrl+C`)**
+- [x] **Fase 6: State Management, Resume, & Signal Handling (`Ctrl+C`)** ✅
 - [ ] **Fase 7: Tampilan Progress Bar & Laporan Akhir (`indicatif`)**
 - [ ] **Fase 8: Pengujian, Benchmarking, & Distribusi Binary**
 
@@ -113,19 +113,20 @@
 
 ---
 
-### Fase 6: State Management, Resume, & Signal Handling (`Ctrl+C`)
-- [ ] Buat struktur state checkpoint (disimpan di `.gasinavif_state.json`):
-  - Status pemindaian direktori.
-  - Daftar file yang selesai diproses beserta statusnya (`Success`, `Skipped`, `Failed`).
-  - Catatan total ukuran folder awal.
-- [ ] Tangani sinyal interupsi (`SIGINT` / `Ctrl+C`):
+### Fase 6: State Management, Resume, & Signal Handling (`Ctrl+C`) ✅
+- [x] Struktur state checkpoint (`.gasinavif_state/progress.json`):
+  - Daftar file yang selesai (`completed`), file dilewati (`skipped`), dan ukuran awal.
+  - Serialisasi/deserialisasi cepat via `serde_json`.
+- [x] Penanganan sinyal interupsi graceful (`SIGINT` / `Ctrl+C`):
   - Tangkap sinyal melalui handler `ctrlc`.
-  - Beri tahu semua thread pekerja untuk berhenti dengan aman (*graceful stop*).
+  - Beri sinyal ke worker `rayon` untuk segera berhenti (`AtomicBool`).
   - Scan dan bersihkan file residu `*.tmp` yang belum tuntas.
-  - Simpan snapshot state terakhir ke disk sebelum proses keluar.
-- [ ] Logika Resume:
-  - Jika `.gasinavif_state.json` ditemukan, muat daftar progres dan langsung lewati file-file yang sudah sukses.
+  - Simpan snapshot state terakhir ke disk sebelum proses keluar (exit code 130).
+- [x] Logika Resume:
+  - Jika file state ditemukan, muat daftar progres dan langsung lewati file-file yang sudah sukses.
   - Jika argumen `--fresh` diberikan, hapus file state dan mulai dari awal.
+  - Bersihkan folder state otomatis saat seluruh pemrosesan tuntas 100%.
+- [x] Unit tests untuk siklus hidup `AppState` dan pembersihan file temporer (`clean_temp_files`).
 
 ---
 

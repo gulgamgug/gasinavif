@@ -78,3 +78,40 @@ impl AppState {
         self.skipped.insert(path);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_state_lifecycle() {
+        let temp_dir = std::env::temp_dir().join("gasinavif_test_state");
+        let _ = std::fs::create_dir_all(&temp_dir);
+
+        let mut state = AppState::load(&temp_dir).unwrap();
+        assert_eq!(state.completed.len(), 0);
+
+        let file_a = temp_dir.join("photo_a.jpg");
+        let file_b = temp_dir.join("photo_b.jpg");
+
+        assert!(!state.is_done(&file_a));
+
+        state.mark_completed(file_a.clone());
+        state.mark_skipped(file_b.clone());
+        state.original_total_size = 123456;
+        state.save(&temp_dir).unwrap();
+
+        // Reload state
+        let loaded = AppState::load(&temp_dir).unwrap();
+        assert!(loaded.is_done(&file_a));
+        assert!(loaded.is_done(&file_b));
+        assert_eq!(loaded.original_total_size, 123456);
+
+        // Reset state
+        AppState::reset(&temp_dir).unwrap();
+        let empty_state = AppState::load(&temp_dir).unwrap();
+        assert_eq!(empty_state.completed.len(), 0);
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+}
