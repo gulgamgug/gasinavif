@@ -38,6 +38,20 @@ impl FolderNode {
         false
     }
 
+    /// Mengecek apakah node ini dan seluruh subfoldernya sudah selesai diproses.
+    pub fn is_all_completed(&self) -> bool {
+        let done = self.direct_completed.load(Ordering::Relaxed);
+        if self.direct_total > 0 && done < self.direct_total {
+            return false;
+        }
+        for child in &self.children {
+            if !child.is_all_completed() {
+                return false;
+            }
+        }
+        true
+    }
+
     /// Merender seluruh hierarki pohon menjadi baris-baris teks terminal.
     pub fn render(&self, spinner_char: char) -> Vec<String> {
         let mut lines = Vec::new();
@@ -57,15 +71,18 @@ impl FolderNode {
         let total = self.direct_total;
 
         // Render status icon: centang hijau jika selesai, spinner jika masih berjalan
-        let status_str = if total == 0 {
-            style("✔".to_string()).green().bold().to_string()
-        } else if done >= total {
+        let is_completed = self.is_all_completed();
+        let status_str = if is_completed {
             style("✔".to_string()).green().bold().to_string()
         } else {
             style(spinner_char.to_string()).cyan().bold().to_string()
         };
 
-        let progress_str = format!("{done}/{total}");
+        let progress_str = if total > 0 {
+            format!("{done}/{total}")
+        } else {
+            "-".to_string()
+        };
 
         let line = if is_root {
             format!("{:<32} {} {}", style(&self.name).bold(), status_str, progress_str)

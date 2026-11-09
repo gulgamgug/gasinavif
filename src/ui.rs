@@ -8,6 +8,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::time::Duration;
 
 /// Membuat progress bar modern untuk satu tahap pemrosesan.
+#[allow(dead_code)]
 pub fn create_progress_bar(total: u64, label: &str) -> ProgressBar {
     let pb = ProgressBar::new(total);
     pb.set_style(
