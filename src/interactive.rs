@@ -37,19 +37,23 @@ pub struct LiveController {
     pub is_verbose: Arc<AtomicBool>,
     pub show_tree: Arc<AtomicBool>,
     pub target_threads: Arc<AtomicUsize>,
+    pub max_threads: usize,
     pub is_interrupted: Arc<AtomicBool>,
     pub worker_slots: Arc<RwLock<Vec<Option<PathBuf>>>>,
     pub log_queue: Arc<Mutex<VecDeque<String>>>,
 }
 
 impl LiveController {
-    pub fn new(initial_threads: usize, initial_verbose: bool) -> Self {
-        let max_slots = 64.max(initial_threads * 2);
+    pub fn new(initial_threads: usize, max_threads: usize, initial_verbose: bool) -> Self {
+        let max_threads = max_threads.max(1);
+        let initial_threads = initial_threads.clamp(1, max_threads);
+        let max_slots = max_threads;
         Self {
             show_workers: Arc::new(AtomicBool::new(false)),
             is_verbose: Arc::new(AtomicBool::new(initial_verbose)),
             show_tree: Arc::new(AtomicBool::new(false)),
-            target_threads: Arc::new(AtomicUsize::new(initial_threads.max(1))),
+            target_threads: Arc::new(AtomicUsize::new(initial_threads)),
+            max_threads,
             is_interrupted: Arc::new(AtomicBool::new(false)),
             worker_slots: Arc::new(RwLock::new(vec![None; max_slots])),
             log_queue: Arc::new(Mutex::new(VecDeque::new())),
@@ -75,6 +79,7 @@ impl LiveController {
         let show_tree = Arc::clone(&self.show_tree);
         let target_threads = Arc::clone(&self.target_threads);
         let is_interrupted = Arc::clone(&self.is_interrupted);
+        let max_threads = self.max_threads;
 
         std::thread::spawn(move || {
             while !is_interrupted.load(Ordering::Relaxed) {
@@ -108,24 +113,29 @@ impl LiveController {
                                 let cur = show_tree.load(Ordering::Relaxed);
                                 show_tree.store(!cur, Ordering::Relaxed);
                             }
-                            // 't' : Cycle jumlah threads
+                            // 't' : Cycle jumlah threads (dibatasi maksimal core CPU)
                             KeyCode::Char('t') | KeyCode::Char('T') => {
                                 let cur = target_threads.load(Ordering::Relaxed);
                                 let next = match cur {
-                                    1..=3 => 4,
-                                    4..=7 => 8,
-                                    8..=11 => 12,
-                                    12..=15 => 16,
-                                    16..=23 => 24,
-                                    24..=31 => 32,
-                                    _ => 2,
+                                    1..=3 => 4.min(max_threads),
+                                    4..=7 => 8.min(max_threads),
+                                    8..=11 => 12.min(max_threads),
+                                    12..=15 => 16.min(max_threads),
+                                    16..=23 => 24.min(max_threads),
+                                    24..=31 => 32.min(max_threads),
+                                    _ => 2.min(max_threads),
                                 };
-                                target_threads.store(next, Ordering::Relaxed);
+                                let next = if next == cur && cur == max_threads {
+                                    (max_threads / 4).max(1)
+                                } else {
+                                    next
+                                };
+                                target_threads.store(next.clamp(1, max_threads), Ordering::Relaxed);
                             }
-                            // '+' : Tambah 1 thread
+                            // '+' : Tambah 1 thread (dibatasi maksimal core CPU)
                             KeyCode::Char('+') | KeyCode::Char('=') => {
                                 let cur = target_threads.load(Ordering::Relaxed);
-                                target_threads.store((cur + 1).min(64), Ordering::Relaxed);
+                                target_threads.store((cur + 1).min(max_threads), Ordering::Relaxed);
                             }
                             // '-' : Kurangi 1 thread
                             KeyCode::Char('-') | KeyCode::Char('_') => {
@@ -178,7 +188,7 @@ impl LiveController {
         let (cols, _) = crossterm::terminal::size().unwrap_or((80, 24));
         let max_path = (cols as usize).saturating_sub(18).max(15);
         let slots = self.worker_slots.read().unwrap();
-        let limit = self.target_threads.load(Ordering::Relaxed);
+        let limit = self.target_threads.load(Ordering::Relaxed).min(self.max_threads);
         let mut lines = Vec::new();
 
         for i in 0..limit {
@@ -208,7 +218,7 @@ impl LiveController {
         let s_on = self.show_workers.load(Ordering::Relaxed);
         let v_on = self.is_verbose.load(Ordering::Relaxed);
         let l_on = self.show_tree.load(Ordering::Relaxed);
-        let threads = self.target_threads.load(Ordering::Relaxed);
+        let threads = self.target_threads.load(Ordering::Relaxed).min(self.max_threads);
 
         let s_label = if s_on { style("s:show (ON)").green().bold() } else { style("s:show (OFF)").dim() };
         let l_label = if l_on { style("l:tree (ON)").green().bold() } else { style("l:tree (OFF)").dim() };
@@ -301,7 +311,7 @@ pub fn execute_with_dynamic_workers<F>(
     let on_complete = Arc::new(on_complete);
     let start_time = Instant::now();
 
-    let max_pool_size = 64;
+    let max_pool_size = controller.max_threads;
     let mut handles = Vec::new();
 
     for worker_id in 0..max_pool_size {
@@ -517,11 +527,12 @@ mod tests {
 
     #[test]
     fn test_live_controller_defaults_and_render() {
-        let ctrl = LiveController::new(4, false);
+        let ctrl = LiveController::new(4, 8, false);
         assert!(!ctrl.show_workers.load(Ordering::Relaxed));
         assert!(!ctrl.is_verbose.load(Ordering::Relaxed));
         assert!(!ctrl.show_tree.load(Ordering::Relaxed));
         assert_eq!(ctrl.target_threads.load(Ordering::Relaxed), 4);
+        assert_eq!(ctrl.max_threads, 8);
 
         let lines = ctrl.render_worker_lines();
         assert_eq!(lines.len(), 4);
