@@ -111,15 +111,38 @@ Options:
 
 ### 🎮 Kontrol Interaktif Saat Program Berjalan (Live Hotkeys)
 
-Saat proses kompresi sedang berjalan di terminal, Anda dapat menekan tombol pintas (*hotkey*) berikut secara langsung:
+Saat proses kompresi sedang berjalan di terminal, Anda dapat menekan tombol pintas (*hotkey*) berikut secara langsung tanpa perlu menekan Enter:
 
 | Tombol | Aksi | Deskripsi |
 | :---: | :--- | :--- |
 | **`s`** | **Show Active Workers** | Toggle tampilan nama file yang sedang aktif diproses per core/thread. |
 | **`v`** | **Toggle Verbose** | Mengaktifkan/menonaktifkan log detail per file secara *on-the-fly*. |
-| **`t`** | **Adjust Threads** | Mengatur jumlah worker thread secara dinamis saat proses berjalan. |
+| **`t`** / **`+`** / **`-`** | **Adjust Threads** | Mengatur jumlah worker thread secara dinamis saat proses berjalan (`+` tambah, `-` kurang). |
 | **`l`** | **Folder Tree Progress** | Toggle tampilan struktur pohon folder beserta progres file dan animasi status per folder. |
 | **`q`** | **Quit / Graceful Stop** | Menghentikan proses dengan aman, membersihkan file `.tmp`, dan menyimpan state. |
+
+#### Contoh Tampilan Tree Mode (`l`):
+```text
+  ── 📁 Hierarki Folder & Progres ──
+  Vacation                         ⠋ 12/45
+  ├── Beach                        ✔ 20/20
+  └── Mountain                     ⠙ 5/15
+  Studio                           ✔ 10/10
+  ⠋ JPG → AVIF [00:00:15] [██████████████████████████████] 47/90 (52%) | 4.8 foto/s | ETA: 00:09
+    [ s:show (OFF) | l:tree (ON) | v:verbose (OFF) | t:threads (12) | q:quit ]
+```
+
+#### Contoh Tampilan Active Workers Mode (`s`):
+```text
+  ── ⚡ Status Pekerja (Active Threads: 12) ──
+    [Core  0] /photos/Vacation/Beach/beach_01.jpg
+    [Core  1] /photos/Vacation/Beach/beach_02.jpg
+    [Core  2] /photos/Studio/model_05.jpg
+    [Core  3] (idle)
+    ...
+  ⠋ JPG → AVIF [00:00:15] [██████████████████████████████] 47/90 (52%) | 4.8 foto/s | ETA: 00:09
+    [ s:show (ON) | l:tree (OFF) | v:verbose (OFF) | t:threads (12) | q:quit ]
+```
 
 ### Contoh Skenario
 
