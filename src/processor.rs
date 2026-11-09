@@ -60,6 +60,7 @@ pub fn process_jpg_to_avif(
     let tmp_avif = dir.join(format!("{stem}.avif.tmp"));
     let final_avif = dir.join(format!("{stem}.avif"));
 
+    let mut avif_created = false;
     if is_avifenc_available() {
         // Fast path: SIMD libaom via avifenc (10-15x lebih cepat daripada pure-Rust ravif)
         let status = std::process::Command::new("avifenc")
@@ -77,17 +78,15 @@ pub fn process_jpg_to_avif(
             .stderr(std::process::Stdio::null())
             .status();
 
-        match status {
-            Ok(s) if s.success() && tmp_avif.exists() => {
-                // Berhasil encode dengan avifenc
-            }
-            _ => {
-                let _ = std::fs::remove_file(&tmp_avif);
-                return Ok(ProcessResult::Failed("avifenc gagal memproses file".to_string()));
+        if let Ok(s) = status {
+            if s.success() && tmp_avif.exists() {
+                avif_created = true;
             }
         }
-    } else {
-        // Fallback: ravif pure-Rust encoder di memori
+    }
+
+    if !avif_created {
+        // Fallback: ravif pure-Rust encoder di memori jika avifenc tidak ada atau gagal
         let dyn_img = image::open(jpg_path)
             .with_context(|| format!("Gagal decode JPEG: {}", jpg_path.display()))?;
         let rgba = dyn_img.to_rgba8();

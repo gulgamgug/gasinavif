@@ -16,6 +16,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 fn main() -> Result<()> {
+    // Matikan log warning C-level dari rexiv2 / exiv2 agar tidak merusak tampilan terminal
+    rexiv2::set_log_level(rexiv2::LogLevel::MUTE);
+
     let args = cli::Args::parse();
     let start_time = Instant::now();
 
@@ -66,9 +69,8 @@ fn main() -> Result<()> {
 
     let app_state = Arc::new(Mutex::new(state::AppState::load(&target_dir)?));
 
-    // ── Inisialisasi Live Controller & Keyboard Listener ──
+    // ── Inisialisasi Live Controller ──
     let controller = Arc::new(interactive::LiveController::new(initial_threads, args.verbose));
-    let _raw_guard = controller.start_keyboard_listener();
 
     // Setup signal handler Ctrl+C (fallback di samping hotkey listener)
     {
@@ -136,23 +138,23 @@ fn main() -> Result<()> {
         style("╠══════════════════════════════════════════╣").cyan()
     );
     println!(
-        "║  RAW tanpa JPG (→ Tahap 1) : {:>5}        ║",
+        "║  RAW tanpa JPG (→ Tahap 1) : {:>5}       ║",
         style(stage1.len()).green().bold()
     );
     println!(
-        "║  JPG untuk AVIF (→ Tahap 2): {:>5}        ║",
+        "║  JPG untuk AVIF (→ Tahap 2): {:>5}       ║",
         style(stage2.len()).green().bold()
     );
     println!(
-        "║  RAW duplikat (ada JPG)    : {:>5}        ║",
+        "║  RAW duplikat (ada JPG)    : {:>5}       ║",
         style(raw_to_delete.len()).yellow().bold()
     );
     println!(
-        "║  Sudah di-skip / selesai   : {:>5}        ║",
+        "║  Sudah di-skip / selesai   : {:>5}       ║",
         style(scan.skipped.len()).dim()
     );
     println!(
-        "║  Ukuran folder awal        : {:>10}   ║",
+        "║  Ukuran folder awal        : {:>10}  ║",
         style(ui::format_size(scan.total_original_size)).white().bold()
     );
     println!(
@@ -244,6 +246,9 @@ fn main() -> Result<()> {
     let stage2_processed = Arc::new(AtomicUsize::new(0));
     let skipped_count = Arc::new(AtomicUsize::new(0));
     let newly_created_jpgs = Arc::new(Mutex::new(Vec::<PathBuf>::new()));
+
+    // ── Aktifkan Keyboard Listener live saat pemrosesan dimulai ──
+    let _raw_guard = controller.start_keyboard_listener();
 
     // ── TAHAP 1: Konversi RAW → JPG dengan Live Controls ──
     if !stage1.is_empty() && !args.dry_run && !controller.is_interrupted.load(Ordering::Relaxed) {
